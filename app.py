@@ -8,6 +8,11 @@ from sklearn.metrics.pairwise import cosine_similarity
 from scipy.sparse import csr_matrix
 import csv
 import seaborn as sns
+from scipy.sparse import csr_matrix
+from sklearn.decomposition import TruncatedSVD
+from sklearn.preprocessing import StandardScaler
+from sklearn.cluster import KMeans
+from sklearn.metrics import silhouette_score
 
 # App Configurations
 st.set_page_config(page_title="Spotify Recommender", layout="wide")
@@ -109,28 +114,27 @@ if uploaded_file:
         user_artists = set(
             user_artist_matrix.loc[user_id][user_artist_matrix.loc[user_id] > 0].index
         )
-        recommended_artists = set()
+        recommendations = []
         for similar_user in similar_users:
             similar_artists = set(
                 user_artist_matrix.loc[similar_user][
                     user_artist_matrix.loc[similar_user] > 0
                 ].index
             )
-            recommended_artists.update(similar_artists - user_artists)
-            if len(recommended_artists) >= top_n:
+            new_artists = similar_artists - user_artists
+            for artist in new_artists:
+                recommendations.append(f"{artist} - Matched with {similar_user}")
+            if len(recommendations) >= top_n:
                 break
-        return list(recommended_artists)[:top_n]
+        return recommendations[:top_n]
 
     if st.button("🔍 Recommend Artists"):
-        recommendations = recommend_artists(selected_user, top_n=5)
-        st.write(
-            "🎤 Recommended Artists:",
-            recommendations if recommendations else "No recommendations found.",
-        )
+        with st.spinner("🔄 Generating recommendations..."):
+            recommendations = recommend_artists(selected_user, top_n=5)
+            st.success("✅ Done!")
+            st.write("🎤 Recommended Artists:", recommendations if recommendations else "No recommendations found.")
 
     # Network Graph Visualization
-    st.subheader("🌐 How These Matches Were Made")
-
     def create_network_graph(user_id, top_n=5):
         G = nx.Graph()
         similar_users = (
@@ -164,7 +168,7 @@ if uploaded_file:
         create_network_graph(selected_user, top_n=5)
 
     # Heatmap of Similarity
-
+    st.subheader("🌐 How These Matches Were Made")
     # Select top 10 most similar users
     similar_users = (
         similarity_df[selected_user].sort_values(ascending=False).head(10).index
@@ -190,3 +194,62 @@ if uploaded_file:
     )
 
     st.pyplot(fig)
+
+    # Create Artist-User Matrix
+    artist_user_df = (
+        df.groupby(["artistname", "user_id"]).size().reset_index(name="track_count")
+    )
+    artist_user_matrix = artist_user_df.pivot_table(
+        index="artistname", columns="user_id", values="track_count", fill_value=0
+    )
+
+    # Normalize Data
+    scaler = StandardScaler()
+    artist_user_matrix_scaled = scaler.fit_transform(artist_user_matrix)
+    artist_user_matrix_scaled_df = pd.DataFrame(
+        artist_user_matrix_scaled,
+        index=artist_user_matrix.index,
+        columns=artist_user_matrix.columns,
+    )
+
+    # Dimensionality Reduction with Truncated SVD
+    svd = TruncatedSVD(n_components=2, random_state=42)
+    artist_user_pca = svd.fit_transform(artist_user_matrix_scaled_df)
+    artist_user_pca_df = pd.DataFrame(
+        artist_user_pca, index=artist_user_matrix.index, columns=["PCA1", "PCA2"]
+    )
+
+    # Clustering with K-Means
+    optimal_k = 10
+    kmeans = KMeans(n_clusters=optimal_k, random_state=42, n_init=10)
+    user_clusters = kmeans.fit_predict(artist_user_pca_df)
+    artist_user_pca_df["cluster"] = user_clusters
+
+    # Silhouette Score
+    sil_score = silhouette_score(
+        artist_user_pca_df[["PCA1", "PCA2"]], artist_user_pca_df["cluster"]
+    )
+    st.subheader(f"⭐ Silhouette Score: {sil_score:.2f}")
+
+    # User Cluster Visualization
+    st.subheader("🎨 User Clusters Based on Artist Preferences")
+    fig = px.scatter(
+        artist_user_pca_df,
+        x="PCA1",
+        y="PCA2",
+        color=artist_user_pca_df["cluster"].astype(str),
+        title="User Clusters",
+        labels={"cluster": "Cluster"},
+    )
+    st.plotly_chart(fig)
+
+    selected_user = st.selectbox(
+        "Select a User ID for Cluster-Based Recommendations", df["artistname"].unique()
+    )
+    if selected_user:
+        if selected_user in artist_user_pca_df.index:
+            user_cluster = artist_user_pca_df.loc[selected_user, "cluster"]
+            similar_users = artist_user_pca_df[artist_user_pca_df["cluster"] == user_cluster].index.tolist()
+            st.write(f"👥 Users in the same cluster as {selected_user}: {similar_users}")
+        else:
+            st.error(f"User {selected_user} is not found in the clustering results. Please select another user.")
