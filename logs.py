@@ -17,6 +17,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.preprocessing import LabelEncoder
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, log_loss
+from sklearn.model_selection import train_test_split
 
 # Configuração da página
 st.set_page_config(page_title="System Event Prediction App", layout="wide")
@@ -328,6 +329,101 @@ with st.expander("Log Transitions Network Graph"):
             "Carregue os logs na etapa 1 para visualizar o grafo de transições entre eventos."
         )
 
+st.header("Training Loss & Accuracy Monitoring")
+if "parsed_logs" in st.session_state:
+    # Prepare the data from parsed logs
+    logs_pred = st.session_state["parsed_logs"].dropna(subset=["event"]).copy()
+    logs_pred["event_clean"] = logs_pred["event"].apply(clean_log_entry)
+
+    # Vectorize the cleaned log events
+    tfidf_vectorizer_train = TfidfVectorizer(analyzer="word", ngram_range=(1, 2))
+    X_tfidf_all = tfidf_vectorizer_train.fit_transform(
+        logs_pred["event_clean"].tolist()
+    )
+
+    # Encode labels using the cleaned events
+    label_encoder_train = LabelEncoder()
+    y_all = label_encoder_train.fit_transform(logs_pred["event_clean"])
+
+    # Create sequences: use each event to predict the next one
+    X = X_tfidf_all[:-1]
+    y = y_all[1:]
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42
+    )
+
+    # Initialize lists to track training metrics
+    losses = []
+    accuracies = []
+    num_iterations = 50  # Adjust as needed
+
+    # Initialize the model with warm_start=True to retain progress
+    log_model = LogisticRegression(
+        max_iter=1, multi_class="multinomial", solver="lbfgs", warm_start=True
+    )
+
+    st.markdown("### Training Progress")
+    progress_text = st.empty()
+    progress_bar = st.progress(0)
+
+    # Train in multiple steps and record loss & accuracy
+    for i in range(num_iterations):
+        log_model.fit(X_train, y_train)  # Train for one iteration
+        y_pred_proba = log_model.predict_proba(X_train)
+        y_train_pred = log_model.predict(X_train)
+
+        loss = log_loss(y_train, y_pred_proba)
+        accuracy = accuracy_score(y_train, y_train_pred)
+
+        losses.append(loss)
+        accuracies.append(accuracy)
+
+        progress_text.text(
+            f"Iteration {i+1}/{num_iterations}: Log Loss = {loss:.4f}, Accuracy = {accuracy:.2%}"
+        )
+        progress_bar.progress((i + 1) / num_iterations)
+
+    # Evaluate the final model on test data
+    y_test_pred = log_model.predict(X_test)
+    final_accuracy = accuracy_score(y_test, y_test_pred)
+    st.success(f"Final Model Accuracy on Test Data: {final_accuracy:.2%}")
+
+    st.session_state["tfidf_vectorizer_train"] = tfidf_vectorizer_train
+    st.session_state["log_model"] = log_model
+    st.session_state["label_encoder_train"] = label_encoder_train
+
+    with st.expander("📈 Training Loss & Accuracy Over Iterations"):
+        fig, ax = plt.subplots(figsize=(10, 5))
+        ax.plot(
+            range(1, num_iterations + 1),
+            losses,
+            marker="o",
+            linestyle="--",
+            color="b",
+            label="Training Loss",
+        )
+        ax.plot(
+            range(1, num_iterations + 1),
+            accuracies,
+            marker="s",
+            linestyle="-",
+            color="g",
+            label="Training Accuracy",
+        )
+        ax.set_xlabel("Iteration")
+        ax.set_ylabel("Value")
+        ax.set_title("📉 Training Loss & Accuracy Over Iterations")
+        ax.legend()
+        ax.grid(True)
+        st.pyplot(fig)
+
+else:
+    st.info("Carregue os logs na etapa 1 para treinar o modelo.")
+
+# ================================
+# 3. Prever Próximo Evento (Machine Learning)
+# ================================
 if "parsed_logs" in st.session_state:
     st.header("Prever Próximo Evento (Machine Learning)")
     logs_pred = st.session_state["parsed_logs"].dropna(subset=["event"]).copy()
@@ -336,71 +432,61 @@ if "parsed_logs" in st.session_state:
     if logs_pred.shape[0] < 2:
         st.warning("Número insuficiente de logs para predição.")
     else:
-        # Vetorização e codificação dos eventos
-        tfidf_vectorizer = TfidfVectorizer(analyzer="word", ngram_range=(1, 2))
-        X_tfidf = tfidf_vectorizer.fit_transform(logs_pred["event_clean"].tolist())
-        label_encoder = LabelEncoder()
-        y_labels = label_encoder.fit_transform(logs_pred["event_clean"])
-
-        # Preparação dos dados para sequência: de evento atual para o próximo
-        X = X_tfidf[:-1]
-        y = y_labels[1:]
-
-        # --- Animação de Treinamento do Modelo ---
-        st.subheader("Treinamento do Modelo")
-        if "trained_model" not in st.session_state:
-            with st.spinner("Treinando modelo..."):
-                progress_bar = st.progress(0)
-                for percent in range(100):
-                    time.sleep(0.005)
-                    progress_bar.progress(percent + 1)
-                model = LogisticRegression(max_iter=1000)
-                model.fit(X, y)
-                st.session_state["trained_model"] = model
-            st.success("Modelo de predição treinado com sucesso!")
+        # Make sure the trained model and vectorizer are saved in session_state
+        if (
+            "tfidf_vectorizer_train" not in st.session_state
+            or "log_model" not in st.session_state
+            or "label_encoder_train" not in st.session_state
+        ):
+            st.error(
+                "O modelo não foi treinado. Execute a etapa de treinamento primeiro."
+            )
         else:
-            model = st.session_state["trained_model"]
-            st.success("Modelo de predição treinado com sucesso!")
+            # Interface para seleção de um log para predição
+            # Use the stored vectorizer to determine the total number of vectorized logs
+            tfidf_vectorizer = st.session_state["tfidf_vectorizer_train"]
+            total_logs = (
+                tfidf_vectorizer.transform(logs_pred["event_clean"]).shape[0] - 1
+            )
+            sample_index = st.slider(
+                "Selecione o índice do log para predição",
+                min_value=0,
+                max_value=int(total_logs),
+                value=0,
+                step=1,
+            )
 
-        # Interface para seleção de um log para predição
-        st.subheader("Realizar Predição")
-        max_index = X.shape[0] - 1
-        sample_index = st.slider(
-            "Selecione o índice do log para predição",
-            min_value=0,
-            max_value=int(max_index),
-            value=0,
-            step=1,
-        )
+            # Exibir o log selecionado
+            sample_log = logs_pred["event_clean"].iloc[sample_index]
+            st.markdown("**Log Selecionado:**")
+            st.code(sample_log, language="bash")
 
-        # Destaque do log selecionado com formatação
-        sample_log = logs_pred["event_clean"].iloc[sample_index]
-        st.markdown("**Log Selecionado:**")
-        st.code(sample_log, language="bash")
+            # Compute the vector for the selected log using the stored vectorizer
+            with st.spinner("Realizando previsão..."):
+                time.sleep(1)  # Simulate processing delay
+                sample_vector = tfidf_vectorizer.transform([sample_log])
+                log_model = st.session_state["log_model"]
+                predicted_label = log_model.predict(sample_vector)
+                predicted_event = st.session_state[
+                    "label_encoder_train"
+                ].inverse_transform(predicted_label)[0]
+                pred_prob = log_model.predict_proba(sample_vector)[0]
+                confidence = pred_prob.max()
 
-        # --- Animação para Previsão ---
-        with st.spinner("Realizando previsão..."):
-            time.sleep(1)  # Simula o tempo de processamento
-            sample_vector = X_tfidf[sample_index]
-            predicted_label = model.predict(sample_vector)
-            predicted_event = label_encoder.inverse_transform(predicted_label)[0]
-            pred_prob = model.predict_proba(sample_vector)[0]
-            confidence = pred_prob.max()
+            st.markdown("**🔮 Próximo Evento Previsto:**")
+            st.code(predicted_event, language="bash")
+            st.markdown(f"**Nível de Confiança:** {confidence*100:.2f}%")
 
-        st.markdown(f"**🔮 Próximo Evento Previsto:**")
-        st.code(predicted_event, language="bash")
-        st.markdown(f"**Nível de Confiança:** {confidence*100:.2f}%")
-
-        with st.expander("Ver Probabilidades de Previsão"):
-            prob_df = pd.DataFrame(
-                {
-                    "Evento": label_encoder.inverse_transform(
-                        np.arange(len(pred_prob))
-                    ),
-                    "Probabilidade": pred_prob,
-                }
-            ).sort_values("Probabilidade", ascending=False)
-            st.dataframe(prob_df)
+            with st.expander("Ver Probabilidades de Previsão"):
+                prob_df = pd.DataFrame(
+                    {
+                        "Evento": st.session_state[
+                            "label_encoder_train"
+                        ].inverse_transform(np.arange(len(pred_prob))),
+                        "Probabilidade": pred_prob,
+                    }
+                ).sort_values("Probabilidade", ascending=False)
+                st.dataframe(prob_df)
 else:
     st.info("Carregue os logs na etapa 1 para usar o módulo de predição.")
 
