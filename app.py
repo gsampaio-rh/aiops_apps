@@ -400,11 +400,16 @@ if uploaded_file:
         columns=["Component 1", "Component 2"],
     )
 
+    with st.expander("🔢 Artist Embedding DataFrame"):
+        st.dataframe(artist_reduced_df)
+
     # Cluster Artists with K-Means
     optimal_k = st.slider("Select Number of Clusters", min_value=2, max_value=20, value=10)
     kmeans = KMeans(n_clusters=optimal_k, random_state=42, n_init=10)
     clusters = kmeans.fit_predict(artist_reduced_df)
     artist_reduced_df["cluster"] = clusters
+    # Add a dedicated column for artist names (if not already present)
+    artist_reduced_df["artist"] = artist_reduced_df.index
 
     # Compute and Display Silhouette Score
     sil_score = silhouette_score(
@@ -420,6 +425,8 @@ if uploaded_file:
         color=artist_reduced_df["cluster"].astype(str),
         title="Artist Clusters Based on Playlist Co-occurrence",
         labels={"cluster": "Cluster"},
+        hover_name="artist",  # Show artist name on hover
+        hover_data={"Component 1": True, "Component 2": True},
     )
     st.plotly_chart(fig)
 
@@ -434,7 +441,7 @@ if uploaded_file:
                 artist_reduced_df["cluster"] == selected_cluster
             ].index.tolist()
             st.write(
-                f"👥 Artists in the same cluster as {selected_artist}: {similar_artists}"
+                f"🧑‍🎤👩‍🎤 Artists in the same cluster as {selected_artist}: {similar_artists}"
             )
         else:
             st.error(
