@@ -335,40 +335,6 @@ if uploaded_file:
                 # If desired, add a note for recommended artists
                 st.info(f"Above are the top {top_n_artists} recommended artists based on similar users.")
 
-    
-    # # Network Graph Visualization
-    # def create_network_graph(user_id, top_n=5):
-    #     G = nx.Graph()
-    #     similar_users = (
-    #         similarity_df[user_id].sort_values(ascending=False).head(top_n).index
-    #     )
-    #     recommended_artists = recommend_artists(user_id, top_n)
-
-    #     for similar_user in similar_users:
-    #         G.add_edge(
-    #             user_id, similar_user, weight=similarity_df.at[user_id, similar_user]
-    #         )
-    #         for artist in recommended_artists:
-    #             G.add_edge(similar_user, artist, weight=0.5)
-    #             G.nodes[artist]["color"] = "red"
-
-    #     pos = nx.spring_layout(G)
-    #     node_colors = [G.nodes[n].get("color", "lightblue") for n in G.nodes()]
-    #     plt.figure(figsize=(10, 6))
-    #     nx.draw(
-    #         G,
-    #         pos,
-    #         with_labels=True,
-    #         node_color=node_colors,
-    #         edge_color="gray",
-    #         node_size=2000,
-    #         font_size=10,
-    #     )
-    #     st.pyplot(plt)
-
-    # if st.button("🔍 Show Recommendation Graph"):
-    #     create_network_graph(selected_user, top_n=5)
-
     # # Create Artist-User Matrix
     # artist_user_df = (
     #     df.groupby(["artistname", "user_id"]).size().reset_index(name="track_count")
