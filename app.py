@@ -274,10 +274,29 @@ if uploaded_file:
             # 🎭 Generate the visual grid matrix
             fig, ax = plt.subplots(figsize=(9, 5))
             matrix_data = filtered_matrix.to_numpy()
+
             # Replace numerical values with icons: "✔️" for interaction, "❌" for none
-            icon_matrix = np.where(matrix_data > 0, "✔️", "❌")
-            
+            # We'll add a 💡 for new recommended artists
+            icon_matrix = np.full(matrix_data.shape, "❌", dtype=object)
+
+            # Mark interactions (✔️)
+            icon_matrix[matrix_data > 0] = "✔️"
+
+            # Mark new recommended artists with 💡 only for the relevant cells
+            for row_idx, user in enumerate(filtered_matrix.index):
+                for col_idx, artist in enumerate(filtered_matrix.columns):
+                    # Check if this artist is recommended but not yet interacted with
+                    if (
+                        artist in recommended_artists_in_matrix
+                        and artist not in selected_user_artists
+                    ):
+                        if matrix_data[row_idx, col_idx] == 0:  # No interaction by this user
+                            icon_matrix[row_idx, col_idx] = "💡"
+
+            # Convert icon_matrix to DataFrame
             grid_df = pd.DataFrame(icon_matrix, index=filtered_matrix.index, columns=filtered_matrix.columns)
+
+            # Display the grid with styled icons
             st.dataframe(grid_df.style.set_properties(**{"text-align": "center"}))
 
     # st.subheader("🔍 Collaborative Filtering Recommendation")
