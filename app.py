@@ -400,6 +400,33 @@ if uploaded_file:
         columns=["Component 1", "Component 2"],
     )
 
+    with st.expander("Artist vs. Playlists Matrix"):
+        # Define sliders to let the user choose how many top playlists and artists to display
+        top_n_playlists = st.slider("Select Top N Playlists", min_value=1, max_value=50, value=10, key="playlist_slider")
+        top_n_artists = st.slider(
+            "Select Top N Artists",
+            min_value=1,
+            max_value=50,
+            value=10,
+            key="artists_slider",
+        )
+
+        # Create the artist-playlist matrix (binary presence)
+        artist_playlist = df[["artistname", "playlistname"]].drop_duplicates()
+        artist_playlist_matrix = pd.crosstab(artist_playlist["artistname"], artist_playlist["playlistname"])
+
+        # Get top playlists and artists based on their frequency in the original DataFrame
+        top_playlists = df["playlistname"].value_counts().head(top_n_playlists).index
+        top_artists = df["artistname"].value_counts().head(top_n_artists).index
+
+        # Filter the matrix for only these top playlists and artists
+        filtered_matrix = artist_playlist_matrix.loc[
+            artist_playlist_matrix.index.isin(top_artists),
+            artist_playlist_matrix.columns.isin(top_playlists)
+        ]
+
+        st.dataframe(filtered_matrix)
+
     with st.expander("🔢 Artist Embedding DataFrame"):
         st.dataframe(artist_reduced_df)
 
