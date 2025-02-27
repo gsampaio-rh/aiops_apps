@@ -43,14 +43,15 @@ demo_mode = st.sidebar.radio(
 )
 
 
-# ---- Function: Call Pure LLM Endpoint ----
-def get_llm_response(prompt, temperature=0.0):
+# ---- Function: Call LLM Endpoint with System & User Prompts ----
+def get_llm_response(system_prompt, user_prompt, temperature=0.0):
     endpoint = (
         "http://localhost:11434/api/generate"  # Replace with your LLM endpoint URL
     )
     payload = {
         "model": "llama3.1:latest",
-        "prompt": prompt,
+        "system": system_prompt,
+        "prompt": user_prompt,
         "temperature": temperature,
         "stream": False,
     }
@@ -62,9 +63,6 @@ def get_llm_response(prompt, temperature=0.0):
 
 
 # ---- Function: RAG Chain (Using LangChain) ----
-# Note: Ensure you have set up your vector store, document loading, and embedding generation.
-# This sample assumes you have a local folder 'markdown_files' with your documents.
-
 @st.cache_data(show_spinner=False)
 def load_documents(markdown_dir="./markdown_files"):
     documents = []
@@ -117,16 +115,14 @@ A **prompt** is the input we provide to the language model, and it consists of t
    This is the actual question or task provided by the user. It specifies what information or action is required.  
    *Example:* "Summarize the last 10 critical errors in the Kubernetes logs and suggest potential fixes."
 
-The combination of both ensures that the model understands not only what is being asked but also how to frame its response.
+Together, these prompts ensure the model’s response is both context-aware and directly relevant to your query.
 """
 )
 
-# Optional: Interactive Visualization for Prompts
 with st.expander("See a Sample Prompt Breakdown"):
     st.markdown("### Sample Prompt Breakdown")
     sample_system = "You are a helpful IT operations assistant. Provide concise and factual recommendations based on system logs."
     sample_user = "Summarize the last 10 critical errors in the Kubernetes logs and suggest potential fixes."
-
     st.markdown(
         f"""
     <div style="background-color: #f0f0f5; padding: 15px; border-radius: 8px; margin-bottom: 10px;">
@@ -140,102 +136,91 @@ with st.expander("See a Sample Prompt Breakdown"):
     """,
         unsafe_allow_html=True,
     )
-
     st.markdown(
         """
     **How It Works:**
-    - The **system prompt** sets the stage. It instructs the model to act in a certain way (e.g., as a helpful assistant), which influences its style and the kind of information it provides.
-    - The **user prompt** is the direct question. It tells the model what information you need.
+    - The **system prompt** sets the stage by guiding the model's behavior.
+    - The **user prompt** provides the direct question.
     
-    Together, these prompts ensure that the model’s response is both context-aware and directly relevant to your query.
+    Combined, they ensure the model understands both what to do and what is being asked.
     """
     )
 
-# ---- Main Interface: User Question ----
-st.markdown("### Enter your question")
-user_question = st.text_input(
-    "Ask a technical question:",
-    "Summarize the last 10 critical errors in the Kubernetes logs and suggest potential fixes.",
-)
+# ---- Main Interface: System and User Prompts ----
+st.markdown("### Enter your Prompts")
+default_system_prompt = "You are a helpful IT operations assistant. Provide concise and factual recommendations based on system logs."
+default_user_prompt = "Summarize the last 10 critical errors in the Kubernetes logs and suggest potential fixes."
 
-if user_question:
-    st.markdown("#### Your Question:")
-    st.markdown(f"*{user_question}*")
+system_prompt = st.text_area("System Prompt:", default_system_prompt, height=100)
+user_prompt = st.text_input("User Prompt:", default_user_prompt)
+
+
+# ---- Visualization: How LLMs Work (Tokenization, Self-Attention & Embeddings) ----
+st.markdown("---")
+if user_prompt:
+    st.markdown("#### Tokenization")
+    tokens = user_prompt.split()
+    token_html = " ".join(
+        [f"<span class='token' title='Token: {t}'>{t}</span>" for t in tokens]
+    )
+    st.markdown(token_html, unsafe_allow_html=True)
     time.sleep(0.5)
 
-    # ---- Visualization: How LLMs Work (Tokenization & Embeddings) ----
-    st.markdown("---")
+    st.markdown("#### Self-Attention Visualization")
+    attention_matrix = np.random.rand(len(tokens), len(tokens))
+    fig_attention = px.imshow(
+        attention_matrix,
+        labels=dict(x="Tokens", y="Tokens", color="Attention Weight"),
+        x=tokens,
+        y=tokens,
+        color_continuous_scale="Reds",
+    )
+    fig_attention.update_layout(title="Simulated Self-Attention Weights")
+    st.plotly_chart(fig_attention, use_container_width=True)
+    time.sleep(0.5)
 
-    if user_question:
-        # Real tokenization (for demonstration, a simple split)
-        st.markdown("#### Tokenization")
-        tokens = user_question.split()
-        token_html = " ".join([f"<span class='token' title='Token: {t}'>{t}</span>" for t in tokens])
-        st.markdown(token_html, unsafe_allow_html=True)
-        time.sleep(0.5)
+    embedding_model = OllamaEmbeddings(model="llama3.1")
+    with st.spinner("Generating real embeddings..."):
+        real_embeddings = embedding_model.embed_documents(tokens)
+        embeddings_matrix = np.array(real_embeddings)
+    st.markdown("#### Embeddings Matrix")
+    st.write(embeddings_matrix)
 
-        # ---- Self-Attention Representation ----
-        st.markdown("#### Self-Attention Visualization")
-        # For demonstration, we simulate an attention matrix with random values between tokens.
-        # In a real scenario, these values would come from the model's attention layers.
-        attention_matrix = np.random.rand(len(tokens), len(tokens))
-        # Create a heatmap using Plotly Express
-        fig_attention = px.imshow(
-            attention_matrix,
-            labels=dict(x="Tokens", y="Tokens", color="Attention Weight"),
-            x=tokens,
-            y=tokens,
-            color_continuous_scale="Reds",
-        )
-        fig_attention.update_layout(title="Simulated Self-Attention Weights")
-        st.plotly_chart(fig_attention, use_container_width=True)
+st.markdown("---")
 
-        # Real Embeddings Transformation using OllamaEmbeddings
-        embedding_model = OllamaEmbeddings(model="llama3.1")
-        with st.spinner("Generating real embeddings..."):
-            # Compute real embeddings for each token
-            real_embeddings = embedding_model.embed_documents(tokens)
-            # Convert list of embeddings to numpy array for visualization
-            embeddings_matrix = np.array(real_embeddings)
-
-            st.markdown("#### Embeddings Matrix")
-            st.write(embeddings_matrix)
-
-    st.markdown("---")
-
-    if demo_mode == "LLM Only":
-        # Pure LLM demonstration
-        with st.spinner("Generating response using pure LLM..."):
-            response_text = get_llm_response(user_question, temperature=0.2)
-        # Highlight the response in a styled container
-        st.markdown("### LLM Response:")
-        highlighted_response = f"""
-        <div style="
-            background-color: #e0f7fa;
-            border-left: 4px solid #00796b;
-            padding: 20px;
-            margin: 20px 0;
-            border-radius: 8px;
-            font-size: 1.1em;
-            line-height: 1.5;">
-            {response_text}
-        </div>
-        """
-        st.markdown(highlighted_response, unsafe_allow_html=True)
-
-    elif demo_mode == "RAG + Intelligent Search":
-        # RAG demonstration: retrieve relevant documents and augment query
-        st.markdown("### Retrieving Contextual Data...")
-        # Retrieve context from vector store
-        retriever = vector_store.as_retriever()
-        # Get top-k chunks (for demonstration, we just join a few)
-        results = retriever.get_relevant_documents(user_question)
-        context = "\n".join([doc.page_content for doc in results[:3]])
-        st.markdown("#### Retrieved Context:")
-        st.markdown(context)
-        # Augment the user question with the retrieved context
-        rag_prompt = f"Answer the question based on the following context:\n\n{context}\n\nQuestion: {user_question}"
-        with st.spinner("Generating response using RAG..."):
-            rag_response = get_llm_response(rag_prompt, temperature=0.2)
-        st.markdown("### RAG Response:")
-        st.markdown(f"> {rag_response}")
+# ---- Send Request Button & Main Q&A Execution ----
+if st.button("Send Request to LLM"):
+    if system_prompt and user_prompt:
+        if demo_mode == "LLM Only":
+            with st.spinner("Generating response using pure LLM..."):
+                response_text = get_llm_response(
+                    system_prompt, user_prompt, temperature=0.2
+                )
+            st.markdown("### LLM Response:")
+            highlighted_response = f"""
+            <div style="
+                background-color: #e0f7fa;
+                border-left: 4px solid #00796b;
+                padding: 20px;
+                margin: 20px 0;
+                border-radius: 8px;
+                font-size: 1.1em;
+                line-height: 1.5;">
+                {response_text}
+            </div>
+            """
+            st.markdown(highlighted_response, unsafe_allow_html=True)
+        elif demo_mode == "RAG + Intelligent Search":
+            st.markdown("### Retrieving Contextual Data...")
+            retriever = vector_store.as_retriever()
+            results = retriever.get_relevant_documents(user_prompt)
+            context = "\n".join([doc.page_content for doc in results[:3]])
+            st.markdown("#### Retrieved Context:")
+            st.markdown(context)
+            rag_prompt = f"Answer the question based on the following context:\n\n{context}\n\nQuestion: {user_prompt}"
+            with st.spinner("Generating response using RAG..."):
+                rag_response = get_llm_response(
+                    system_prompt, rag_prompt, temperature=0.2
+                )
+            st.markdown("### RAG Response:")
+            st.markdown(f"> {rag_response}")
