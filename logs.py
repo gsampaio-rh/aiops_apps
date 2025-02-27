@@ -204,6 +204,20 @@ if "parsed_logs" in st.session_state:
     values_str = " ".join([f"{val:.8f}" for val in nonzero_values])
     indexes_str = " ".join(map(str, nonzero_indices))
 
+    # -------------------------------------------
+    # Show the log broken into tokens with animation
+    # -------------------------------------------
+    st.markdown("**Log Broken Into Tokens:**")
+
+    # Tokenize the selected log into individual tokens using a simple regex
+    tokens = re.findall(r"\S+", selected_log)
+
+    # Join tokens into a single string separated by a vertical bar for clarity
+    token_string = " | ".join(tokens)
+
+    # Display the tokens
+    st.code(token_string)
+
     st.markdown("**Tokenized Log Sequences (Nonzero Values Only)**")
     st.code(f"X: [{values_str}]\n(Indexes: [{indexes_str}])", language="python")
 
