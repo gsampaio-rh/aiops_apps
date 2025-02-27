@@ -330,6 +330,23 @@ with st.expander("Log Transitions Network Graph"):
         )
 
 st.header("Training Loss & Accuracy Monitoring")
+with st.expander("Visualizar Fluxo do Pipeline"):
+    pipeline_diagram = """
+    digraph {
+        rankdir=LR;
+        node [shape=box, style=filled, color="#EFEFEF", fontname="Helvetica"];
+        A [label="Upload de Logs"];
+        B [label="Parsing e Pré-processamento"];
+        C [label="Visualização de Tendências\n& Anomalias"];
+        D [label="Modelagem ML\n(Logistic Regression)"];
+        E [label="Predição do Próximo Evento"];
+
+        A -> B -> C;
+        B -> D -> E;
+    }
+    """
+    st.graphviz_chart(pipeline_diagram)
+
 if "parsed_logs" in st.session_state:
     # Prepare the data from parsed logs
     logs_pred = st.session_state["parsed_logs"].dropna(subset=["event"]).copy()
@@ -489,141 +506,98 @@ if "parsed_logs" in st.session_state:
                 st.dataframe(prob_df)
 else:
     st.info("Carregue os logs na etapa 1 para usar o módulo de predição.")
+    
 
+# Ensure logs exist
+if "parsed_logs" in st.session_state:
+    st.header("Grafo: Relações entre Eventos")
 
-# # ================================
-# # 4. Grafo Interativo: Relações entre Eventos (RF-05)
-# # ================================
-# if "parsed_logs" in st.session_state:
-#     st.header("4. Grafo Interativo: Relações entre Eventos")
+    logs_for_graph = st.session_state["parsed_logs"].dropna(subset=["event"]).copy()
+    logs_for_graph["event_clean"] = logs_for_graph["event"].apply(clean_log_entry)
 
-#     # Para construir o grafo, vamos usar os logs limpos
-#     logs_for_graph = st.session_state["parsed_logs"].dropna(subset=["event"]).copy()
-#     logs_for_graph["event_clean"] = logs_for_graph["event"].apply(clean_log_entry)
+    eventos = logs_for_graph["event_clean"].tolist()
+    transicoes = list(zip(eventos[:-1], eventos[1:]))
+    transition_counts = collections.Counter(transicoes)
 
-#     # Gerar transições (par ordenado de eventos consecutivos)
-#     eventos = logs_for_graph["event_clean"].tolist()
-#     transicoes = list(zip(eventos[:-1], eventos[1:]))
-#     transition_counts = collections.Counter(transicoes)
+    G = nx.DiGraph()
+    for (ev_from, ev_to), count in transition_counts.items():
+        G.add_edge(ev_from, ev_to, weight=count)
 
-#     # Criar grafo direcionado com base nas transições
-#     G = nx.DiGraph()
-#     for (ev_from, ev_to), count in transition_counts.items():
-#         # Adiciona aresta com atributo 'weight'
-#         G.add_edge(ev_from, ev_to, weight=count)
+    # 🔥 IMPROVED LAYOUT: Kamada-Kawai for better spacing
+    pos = nx.kamada_kawai_layout(G)
 
-#     # Gerar layout com spring layout
-#     pos = nx.spring_layout(G, k=0.5, iterations=50, seed=42)
+    # ✅ Interactive filters: Degree-based node filtering
+    min_degree, max_degree = st.slider(
+        "📊 Filtrar por Grau do Nó:",
+        1,
+        max(dict(G.degree()).values()),
+        (1, max(dict(G.degree()).values())),
+    )
 
-#     # Criar traços para as arestas
-#     edge_x = []
-#     edge_y = []
-#     for edge in G.edges():
-#         x0, y0 = pos[edge[0]]
-#         x1, y1 = pos[edge[1]]
-#         edge_x.extend([x0, x1, None])
-#         edge_y.extend([y0, y1, None])
+    # Filter nodes by selected degree range
+    filtered_nodes = [
+        node for node, degree in G.degree() if min_degree <= degree <= max_degree
+    ]
+    G_filtered = G.subgraph(filtered_nodes)
 
-#     edge_trace = go.Scatter(
-#         x=edge_x,
-#         y=edge_y,
-#         line=dict(width=0.5, color="#888"),
-#         hoverinfo="none",
-#         mode="lines",
-#     )
+    # Create edges and nodes for visualization
+    edge_x, edge_y = [], []
+    for edge in G_filtered.edges():
+        x0, y0 = pos[edge[0]]
+        x1, y1 = pos[edge[1]]
+        edge_x.extend([x0, x1, None])
+        edge_y.extend([y0, y1, None])
 
-#     # Criar traços para os nós
-#     node_x = []
-#     node_y = []
-#     node_text = []
-#     for node in G.nodes():
-#         x, y = pos[node]
-#         node_x.append(x)
-#         node_y.append(y)
-#         # Exibir o nome do evento e, opcionalmente, o grau do nó
-#         node_text.append(f"{node} (Grau: {G.degree(node)})")
+    edge_trace = go.Scatter(
+        x=edge_x,
+        y=edge_y,
+        line=dict(width=0.7, color="#AAA"),
+        hoverinfo="none",
+        mode="lines",
+    )
 
-#     node_trace = go.Scatter(
-#         x=node_x,
-#         y=node_y,
-#         mode="markers+text",
-#         text=node_text,
-#         textposition="bottom center",
-#         hoverinfo="text",
-#         marker=dict(
-#             showscale=True,
-#             colorscale="YlGnBu",
-#             reversescale=True,
-#             color=[G.degree(node) for node in G.nodes()],
-#             size=10,
-#             line_width=2,
-#         ),
-#     )
+    # ✅ Better node scaling: Size based on degree
+    node_x, node_y, node_text, node_size = [], [], [], []
+    for node in G_filtered.nodes():
+        x, y = pos[node]
+        node_x.append(x)
+        node_y.append(y)
+        node_text.append(f"{node} (Grau: {G_filtered.degree(node)})")
+        node_size.append(5 + 3 * G_filtered.degree(node))  # 🔥 Adaptive size
 
-#     fig_graph = go.Figure(
-#         data=[edge_trace, node_trace],
-#         layout=go.Layout(
-#             title="<b>Grafo de Transições entre Eventos</b>",
-#             # titlefont_size=16,
-#             showlegend=False,
-#             hovermode="closest",
-#             margin=dict(b=20, l=5, r=5, t=40),
-#             annotations=[dict(text="", showarrow=False, xref="paper", yref="paper")],
-#             xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-#             yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-#         ),
-#     )
-#     st.plotly_chart(fig_graph, use_container_width=True)
-# else:
-#     st.info(
-#         "Carregue os logs na etapa 1 para visualizar o grafo de relações entre eventos."
-#     )
+    node_trace = go.Scatter(
+        x=node_x,
+        y=node_y,
+        mode="markers+text",
+        text=node_text,
+        textposition="top center",  # 🔥 Improved readability
+        hoverinfo="text",
+        marker=dict(
+            showscale=True,
+            colorscale="Blues",
+            reversescale=True,
+            color=node_size,  # 🔥 Degree-based coloring
+            size=node_size,  # 🔥 Degree-based sizing
+            line=dict(width=2, color="#333"),
+        ),
+    )
 
-# # ================================
-# # 5. Explicação Interativa do Pipeline e dos Modelos de IA (RF-06)
-# # ================================
-# st.header("5. Explicação do Pipeline e dos Modelos de IA")
+    # ✅ Sleek layout & dark mode optimization
+    fig_graph = go.Figure(
+        data=[edge_trace, node_trace],
+        layout=go.Layout(
+            title="<b>🔗 Relações entre Eventos</b>",
+            showlegend=False,
+            hovermode="closest",
+            margin=dict(b=20, l=5, r=5, t=40),
+            xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+            yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+            paper_bgcolor="#F7F9FC",
+            plot_bgcolor="white",
+        ),
+    )
 
-# with st.expander("Visualizar Fluxo do Pipeline"):
-#     pipeline_diagram = """
-#     digraph {
-#         rankdir=LR;
-#         node [shape=box, style=filled, color="#EFEFEF", fontname="Helvetica"];
-#         A [label="Upload de Logs"];
-#         B [label="Parsing e Pré-processamento"];
-#         C [label="Visualização de Tendências\n& Anomalias"];
-#         D [label="Modelagem ML\n(Logistic Regression)"];
-#         E [label="Predição do Próximo Evento"];
-#         F [label="Comparação e Upgrade\npara Transformers"];
-
-#         A -> B -> C;
-#         B -> D -> E;
-#         D -> F;
-#     }
-#     """
-#     st.graphviz_chart(pipeline_diagram)
-
-# with st.expander("Detalhamento do Pipeline e Modelos"):
-#     st.markdown(
-#         """
-#     **Pipeline de Processamento e Predição:**
-
-#     1. **Upload de Logs:**
-#        O usuário faz o upload de arquivos `.log` ou `.csv` contendo os registros do sistema.
-
-#     2. **Parsing e Pré-processamento:**
-#        - Extração de informações: timestamp, hostname, processo e descrição do evento.
-#        - Conversão de timestamps e limpeza dos textos dos eventos.
-
-#     3. **Visualização de Tendências e Anomalias:**
-#        - Geração de gráficos interativos que mostram a distribuição dos logs ao longo do tempo.
-#        - Detecção de picos suspeitos e análise dos eventos mais recorrentes.
-
-#     4. **Modelagem ML (Baseline):**
-#        - Utilização de **Logistic Regression** para prever o próximo evento com base na sequência de logs.
-#        - Vetorização dos eventos com **TF-IDF** e codificação dos rótulos.
-
-#     5. **Predição do Próximo Evento:**
-#        - Seleção interativa de um log para que o modelo preveja o próximo evento, exibindo o nível de confiança.
-#     """
-#     )
+    # Render graph
+    st.plotly_chart(fig_graph, use_container_width=True)
+else:
+    st.info("⏳ Carregue os logs na etapa 1 para visualizar o grafo de eventos.")
