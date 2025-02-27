@@ -243,14 +243,20 @@ if uploaded_file:
             # Filter the user-artist matrix to include the selected user and their top similar users
             filtered_matrix = user_artist_matrix.loc[[selected_user] + list(similar_users)]
 
-            # Get the set of artists the selected user has interacted with
+            # Determine the set of artists the selected user has interacted with
             selected_user_artists = set(
                 user_artist_matrix.loc[selected_user][user_artist_matrix.loc[selected_user] > 0].index
             )
-            
-            # Limit artists to the union of the selected user's artists and the recommended ones
-            relevant_artists = list(selected_user_artists.union(recommended_artists))[:top_n_artists]
-            filtered_matrix = filtered_matrix[filtered_matrix.columns.intersection(relevant_artists)]
+
+            # Order columns: first, the selected user's liked artists; then, recommended artists.
+            selected_artists_in_matrix = [artist for artist in filtered_matrix.columns if artist in selected_user_artists]
+            recommended_artists_in_matrix = [artist for artist in filtered_matrix.columns if artist in recommended_artists]
+            # Combine them, ensuring no duplicates and limiting to top_n_artists
+            ordered_artists = selected_artists_in_matrix + [
+                artist for artist in recommended_artists_in_matrix if artist not in selected_artists_in_matrix
+            ]
+            ordered_artists = ordered_artists[:top_n_artists]
+            filtered_matrix = filtered_matrix[ordered_artists]
 
             # 🎭 Truncate long usernames & artist names for readability
             max_label_length = 10  # Limit to 10 characters
