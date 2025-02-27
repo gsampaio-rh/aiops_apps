@@ -14,6 +14,47 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score
 
+
+def get_similar_users_and_recommendations(
+    user_id, user_artist_matrix, similarity_df, top_n_users=10
+):
+    """
+    Returns the top similar users and recommended artists for a given user.
+
+    Parameters:
+        user_id (str): The selected user ID.
+        user_artist_matrix (DataFrame): User-Artist interaction matrix.
+        similarity_df (DataFrame): DataFrame of user similarity scores.
+        top_n_users (int): Number of similar users to consider.
+
+    Returns:
+        similar_users (Index): Similar users (excluding the selected user).
+        recommended_artists (list): Artists liked by similar users but not by the selected user.
+    """
+    if user_id not in similarity_df.index:
+        return [], []
+
+    similar_users = (
+        similarity_df[user_id]
+        .sort_values(ascending=False)
+        .iloc[1 : top_n_users + 1]
+        .index
+    )
+
+    selected_user_artists = set(
+        user_artist_matrix.loc[user_id][user_artist_matrix.loc[user_id] > 0].index
+    )
+
+    recommended_artists = set()
+    for su in similar_users:
+        su_artists = set(
+            user_artist_matrix.loc[su][user_artist_matrix.loc[su] > 0].index
+        )
+        recommended_artists.update(su_artists - selected_user_artists)
+
+    return similar_users, list(recommended_artists)
+
+
 # App Configurations
 st.set_page_config(page_title="Spotify Recommender", layout="wide")
 st.title("🎵 Spotify Playlist & Artist Recommender")
@@ -186,103 +227,52 @@ if uploaded_file:
         # 🖼️ Display the heatmap
         st.pyplot(fig)
 
-    max_users = 6
-    max_artists = 6
-
-    # 📌 Enhanced Collaborative Filtering Matrix UI
-    with st.expander(
-        "🔍 View User-Artist Interaction Grid - Collaborative Filtering Recommendation"
-    ):
+    with st.expander("🔍 View User-Artist Interaction Grid - Collaborative Filtering Recommendation", expanded=True):
         if selected_user not in similarity_df.index:
             st.warning("⚠️ Selected user not found in similarity matrix.")
+        else:
+            # 🎛️ User Control for Top N Users & Artists
+            col1, col2 = st.columns(2)
+            top_n_users = col1.slider("🔢 Number of Similar Users", 3, 20, 10)
+            top_n_artists = col2.slider("🎼 Number of Artists", 3, 50, 10)
 
-        # 🎛️ User Control for Top N Users & Artists
-        col1, col2 = st.columns(2)
-        top_n_users = col1.slider("🔢 Number of Similar Users", 3, 20, max_users)
-        top_n_artists = col2.slider("🎼 Number of Artists", 3, 50, max_artists)
-
-        # Get top N similar users (excluding self)
-        similar_users = (
-            similarity_df[selected_user]
-            .sort_values(ascending=False)
-            .iloc[1 : top_n_users + 1]  # Exclude the selected user
-            .index
-        )
-
-        # Get artists the selected user has interacted with
-        selected_user_artists = set(
-            user_artist_matrix.loc[selected_user][
-                user_artist_matrix.loc[selected_user] > 0
-            ].index
-        )
-
-        # Filter user-artist matrix to only include the selected user and their top matches
-        filtered_matrix = user_artist_matrix.loc[[selected_user] + list(similar_users)]
-
-        # 🎭 Highlight recommended artists (artists similar users like but the selected user hasn’t)
-        recommended_artists = set()
-        for similar_user in similar_users:
-            similar_user_artists = set(
-                user_artist_matrix.loc[similar_user][
-                    user_artist_matrix.loc[similar_user] > 0
-                ].index
+            # Use the helper function to compute similar users and recommended artists
+            similar_users, recommended_artists = get_similar_users_and_recommendations(
+                selected_user, user_artist_matrix, similarity_df, top_n_users=top_n_users
             )
-            new_recommendations = similar_user_artists - selected_user_artists
-            recommended_artists.update(new_recommendations)
+            # Filter the user-artist matrix to include the selected user and their top similar users
+            filtered_matrix = user_artist_matrix.loc[[selected_user] + list(similar_users)]
 
-        # 🎼 Limit Number of Artists
-        relevant_artists = list(selected_user_artists.union(recommended_artists))[
-            :top_n_artists
-        ]
-        filtered_matrix = filtered_matrix[
-            filtered_matrix.columns.intersection(relevant_artists)
-        ]
-
-        # 🎭 Truncate Long Usernames & Artists for Readability
-        max_label_length = 10  # Limit to 10 chars
-        truncated_users = {
-            user: (
-                user[:max_label_length] + "..."
-                if len(user) > max_label_length
-                else user
+            # Get the set of artists the selected user has interacted with
+            selected_user_artists = set(
+                user_artist_matrix.loc[selected_user][user_artist_matrix.loc[selected_user] > 0].index
             )
-            for user in filtered_matrix.index
-        }
-        truncated_artists = {
-            artist: (
-                artist[:max_label_length] + "..."
-                if len(artist) > max_label_length
-                else artist
-            )
-            for artist in filtered_matrix.columns
-        }
-        filtered_matrix.index = [
-            truncated_users[user] for user in filtered_matrix.index
-        ]
-        filtered_matrix.columns = [
-            truncated_artists[artist] for artist in filtered_matrix.columns
-        ]
+            
+            # Limit artists to the union of the selected user's artists and the recommended ones
+            relevant_artists = list(selected_user_artists.union(recommended_artists))[:top_n_artists]
+            filtered_matrix = filtered_matrix[filtered_matrix.columns.intersection(relevant_artists)]
 
-        # 🎭 Generate Visual Grid Matrix
-        fig, ax = plt.subplots(figsize=(9, 5))
+            # 🎭 Truncate long usernames & artist names for readability
+            max_label_length = 10  # Limit to 10 characters
+            truncated_users = {
+                user: (user[:max_label_length] + "..." if len(user) > max_label_length else user)
+                for user in filtered_matrix.index
+            }
+            truncated_artists = {
+                artist: (artist[:max_label_length] + "..." if len(artist) > max_label_length else artist)
+                for artist in filtered_matrix.columns
+            }
+            filtered_matrix.index = [truncated_users[user] for user in filtered_matrix.index]
+            filtered_matrix.columns = [truncated_artists[artist] for artist in filtered_matrix.columns]
 
-        # Convert to a NumPy matrix for visualization
-        matrix_data = filtered_matrix.to_numpy()
-
-        # Replace numerical values with icons
-        icon_matrix = np.where(matrix_data > 0, "✔️", "❌")  # ✔️ = liked, ❌ = not liked
-        for i, user in enumerate(filtered_matrix.index):
-            for j, artist in enumerate(filtered_matrix.columns):
-                if artist in recommended_artists:
-                    icon_matrix[i, j] = "🎭"  # 🎭 = Recommended
-
-        # Convert to DataFrame for Streamlit
-        grid_df = pd.DataFrame(
-            icon_matrix, index=filtered_matrix.index, columns=filtered_matrix.columns
-        )
-
-        # 📊 Display Interactive Grid in Streamlit
-        st.dataframe(grid_df.style.set_properties(**{"text-align": "center"}))
+            # 🎭 Generate the visual grid matrix
+            fig, ax = plt.subplots(figsize=(9, 5))
+            matrix_data = filtered_matrix.to_numpy()
+            # Replace numerical values with icons: "✔️" for interaction, "❌" for none
+            icon_matrix = np.where(matrix_data > 0, "✔️", "❌")
+            
+            grid_df = pd.DataFrame(icon_matrix, index=filtered_matrix.index, columns=filtered_matrix.columns)
+            st.dataframe(grid_df.style.set_properties(**{"text-align": "center"}))
 
     # st.subheader("🔍 Collaborative Filtering Recommendation")
 
