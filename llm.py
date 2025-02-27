@@ -42,6 +42,41 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+# Minimal custom CSS for subtle styling (Apple-inspired)
+st.markdown(
+    """
+    <style>
+        /* Use system fonts for a clean, native look */
+        html, body, [class*="css"] {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #ffffff;
+            color: #333;
+        }
+        .header-title {
+            font-size: 2.5rem;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+        .subheader {
+            font-size: 1.25rem;
+            margin-bottom: 20px;
+        }
+        /* Token pill styling */
+        .token-pill {
+            display: inline-block;
+            padding: 6px 12px;
+            margin: 4px 4px;
+            background-color: #f0f0f0;
+            border-radius: 20px;
+            font-size: 14px;
+            color: #555;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 # Page header
 st.markdown(
     "<div class='header-title'>How Does the LLM Work? (Powered by Ollama)</div>",
@@ -51,6 +86,14 @@ st.markdown(
     "<div class='subheader'>Experience the inner workings of an LLM in four elegant steps.</div>",
     unsafe_allow_html=True,
 )
+
+
+# Function to render tokens as elegant pills
+def display_tokens(tokens):
+    pills_html = "".join(
+        [f"<span class='token-pill'>{token}</span>" for token in tokens]
+    )
+    st.markdown(pills_html, unsafe_allow_html=True)
 
 
 # Helper function for section headers (Apple-style simplicity)
@@ -98,7 +141,8 @@ def simulate_llm_process(query):
     with st.spinner("Tokenizing..."):
         time.sleep(1)  # Simulate processing delay
         tokens = query.split()
-    st.write("**Tokens:**", tokens)
+    st.write("**Tokens:**")
+    display_tokens(tokens)
 
     # Step 2: Embedding Generation
     section_header("Step 2: Embedding Generation")
@@ -139,11 +183,10 @@ def simulate_llm_process(query):
         ax.set_title("Token Embeddings", fontsize=14, pad=15)
         ax.axis("off")
         st.pyplot(fig)
-    
+
     # Print the embeddings matrix as a dataframe
     st.write("**Embeddings Matrix:**")
     st.dataframe(embeddings)
-
 
     # Step 3: (Optional) Show additional internal process (skipped for minimalism)
 
