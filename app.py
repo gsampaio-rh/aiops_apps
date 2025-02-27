@@ -192,7 +192,7 @@ if uploaded_file:
 
     # 📌 Heatmap of Similarity
     st.subheader("🌐 Matchmaking Network")
-    with st.expander("🔍 View User Similarity Heatmap"):
+    with st.expander("🔥 View User Similarity Heatmap"):
         # Select top 10 most similar users
         similar_users = (
             similarity_df[selected_user].sort_values(ascending=False).head(10).index
@@ -227,7 +227,7 @@ if uploaded_file:
         # 🖼️ Display the heatmap
         st.pyplot(fig)
 
-    with st.expander("🔍 View User-Artist Interaction Grid - Collaborative Filtering Recommendation", expanded=True):
+    with st.expander("🤝 View User-Artist Interaction Grid - Collaborative Filtering Recommendation"):
         if selected_user not in similarity_df.index:
             st.warning("⚠️ Selected user not found in similarity matrix.")
         else:
@@ -299,40 +299,43 @@ if uploaded_file:
             # Display the grid with styled icons
             st.dataframe(grid_df.style.set_properties(**{"text-align": "center"}))
 
-    # st.subheader("🔍 Collaborative Filtering Recommendation")
+    with st.expander("🔍 View Artist Recommendations"):
+        if selected_user not in similarity_df.index:
+            st.warning("⚠️ Selected user not found in similarity matrix.")
+        else:
+            # 🎛️ User Control for Top N Users & Artists with unique keys
+            col1, col2 = st.columns(2)
+            top_n_users = col1.slider(
+                "🔢 Number of Similar Users", 3, 20, 10, key="recommendations_user_slider"
+            )
+            top_n_artists = col2.slider(
+                "🎼 Number of Artists",
+                3,
+                50,
+                10,
+                key="recommendations_artists_slider",
+            )
 
-    # def recommend_artists(user_id, top_n=5):
-    #     if user_id not in similarity_df.index:
-    #         return []
-    #     similar_users = (
-    #         similarity_df[user_id]
-    #         .sort_values(ascending=False)
-    #         .iloc[1 : top_n + 1]
-    #         .index
-    #     )
-    #     user_artists = set(
-    #         user_artist_matrix.loc[user_id][user_artist_matrix.loc[user_id] > 0].index
-    #     )
-    #     recommendations = []
-    #     for similar_user in similar_users:
-    #         similar_artists = set(
-    #             user_artist_matrix.loc[similar_user][
-    #                 user_artist_matrix.loc[similar_user] > 0
-    #             ].index
-    #         )
-    #         new_artists = similar_artists - user_artists
-    #         for artist in new_artists:
-    #             recommendations.append(f"{artist} - Matched with {similar_user}")
-    #         if len(recommendations) >= top_n:
-    #             break
-    #     return recommendations[:top_n]
+            # Use the helper function to compute similar users and recommended artists
+            similar_users, recommended_artists = get_similar_users_and_recommendations(
+                selected_user, user_artist_matrix, similarity_df, top_n_users=top_n_users
+            )
 
-    # if st.button("🔍 Recommend Artists"):
-    #     with st.spinner("🔄 Generating recommendations..."):
-    #         recommendations = recommend_artists(selected_user, top_n=5)
-    #         st.success("✅ Done!")
-    #         st.write("🎤 Recommended Artists:", recommendations if recommendations else "No recommendations found.")
+            if not recommended_artists:
+                st.info("⚠️ No recommendations found. The selected user may have already interacted with all artists.")
+            else:
+                st.subheader(f"Recommended Artists for {selected_user} (Based on Similar Users)")
 
+                # Display each recommended artist with a 💡 icon and the suggesting user
+                for idx, artist in enumerate(recommended_artists[:top_n_artists], start=1):
+                    st.markdown(
+                        f"**{idx}.** 💡 {artist} (Suggested by: {', '.join(similar_users)})"
+                    )
+
+                # If desired, add a note for recommended artists
+                st.info(f"Above are the top {top_n_artists} recommended artists based on similar users.")
+
+    
     # # Network Graph Visualization
     # def create_network_graph(user_id, top_n=5):
     #     G = nx.Graph()
