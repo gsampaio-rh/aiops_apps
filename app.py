@@ -62,39 +62,70 @@ if uploaded_file:
 
     # Top Artists Visualization
     st.subheader("🎤 Top Artists")
-    top_artists = df["artistname"].value_counts().head(10)
+    top_artists = df["artistname"].value_counts().head(20)
     fig = px.bar(top_artists, x=top_artists.index, y=top_artists.values, title="Top 10 Most Popular Artists")
     st.plotly_chart(fig)
-
-    # Collaborative Filtering Preparation
-    st.subheader("🔍 Collaborative Filtering Recommendation")
-    user_artist_matrix = df.pivot_table(
-        index="user_id", columns="artistname", aggfunc="size", fill_value=0
-    )
-    user_playlist_matrix = df.pivot_table(
-        index="user_id", columns="playlistname", aggfunc="size", fill_value=0
-    )
-    user_artist_sparse = csr_matrix(user_artist_matrix.values)
-    user_playlist_sparse = csr_matrix(user_playlist_matrix.values)
-    user_artist_similarity = cosine_similarity(user_artist_sparse)
-    similarity_df = pd.DataFrame(
-        user_artist_similarity,
-        index=user_artist_matrix.index,
-        columns=user_artist_matrix.index,
-    )
 
     # User Summary
     def user_summary(user_id):
         user_playlists = df[df["user_id"] == user_id]["playlistname"].value_counts()
         user_artists = df[df["user_id"] == user_id]["artistname"].value_counts()
 
-        with st.expander(f"🎧 Playlists for User {user_id}"):
-            for playlist, count in user_playlists.items():
-                st.write(f"📁 {playlist} ({count} tracks)")
+        st.subheader(f"👤 User Profile: {user_id}")
 
-        with st.expander(f"🎤 Favorite Artists for User {user_id}"):
-            for artist, count in user_artists.items():
-                st.write(f"🎵 {artist} ({count} tracks)")
+        # 🎵 Playlists Section with Dropdown
+        with st.expander("📂 Playlists", expanded=True):
+            if user_playlists.empty:
+                st.info("No playlists found for this user.")
+            else:
+                cols = st.columns(min(8, len(user_playlists)))  # Responsive grid
+                for idx, (playlist, count) in enumerate(user_playlists.items()):
+                    with cols[idx % len(cols)]:
+                        st.markdown(
+                            f"""
+                            <div style="
+                                border-radius: 10px;
+                                padding: 10px;
+                                margin: 10px;
+                                background: linear-gradient(135deg, #ff758c, #ff7eb3);
+                                box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.1);
+                                text-align: center;
+                                font-size: 14px;
+                                transition: transform 0.2s ease-in-out;
+                            ">
+                            <h4 style="color: white; margin: 5px;">📁 {playlist}</h4>
+                            <p style="color: white; margin: 2px;">{count} tracks</p>
+                            </div>
+                            """,
+                            unsafe_allow_html=True,
+                        )
+
+        # 🎤 Favorite Artists Section with Dropdown
+        with st.expander("🎤 Favorite Artists", expanded=True):
+            if user_artists.empty:
+                st.info("No favorite artists found for this user.")
+            else:
+                cols = st.columns(min(8, len(user_artists)))  # More compact layout
+                for idx, (artist, count) in enumerate(user_artists.items()):
+                    with cols[idx % len(cols)]:
+                        st.markdown(
+                            f"""
+                            <div style="
+                                border-radius: 10px;
+                                padding: 10px;
+                                margin: 10px;
+                                background: linear-gradient(135deg, #a18cd1, #fbc2eb);
+                                box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.1);
+                                text-align: center;
+                                font-size: 14px;
+                                transition: transform 0.2s ease-in-out;
+                            ">
+                            <h4 style="color: white; margin: 5px;">🎵 {artist}</h4>
+                            <p style="color: white; margin: 2px;">{count} tracks</p>
+                            </div>
+                            """,
+                            unsafe_allow_html=True,
+                        )
 
     # User Input for Recommendation
     st.subheader("🎧 Get Personalized Artist Recommendations")
@@ -133,6 +164,23 @@ if uploaded_file:
             recommendations = recommend_artists(selected_user, top_n=5)
             st.success("✅ Done!")
             st.write("🎤 Recommended Artists:", recommendations if recommendations else "No recommendations found.")
+
+    # Collaborative Filtering Preparation
+    st.subheader("🔍 Collaborative Filtering Recommendation")
+    user_artist_matrix = df.pivot_table(
+        index="user_id", columns="artistname", aggfunc="size", fill_value=0
+    )
+    user_playlist_matrix = df.pivot_table(
+        index="user_id", columns="playlistname", aggfunc="size", fill_value=0
+    )
+    user_artist_sparse = csr_matrix(user_artist_matrix.values)
+    user_playlist_sparse = csr_matrix(user_playlist_matrix.values)
+    user_artist_similarity = cosine_similarity(user_artist_sparse)
+    similarity_df = pd.DataFrame(
+        user_artist_similarity,
+        index=user_artist_matrix.index,
+        columns=user_artist_matrix.index,
+    )
 
     def display_collaborative_filtering_matrix(selected_user, top_n=5):
         if selected_user not in similarity_df.index:
@@ -250,61 +298,61 @@ if uploaded_file:
 
     st.pyplot(fig)
 
-    # Create Artist-User Matrix
-    artist_user_df = (
-        df.groupby(["artistname", "user_id"]).size().reset_index(name="track_count")
-    )
-    artist_user_matrix = artist_user_df.pivot_table(
-        index="artistname", columns="user_id", values="track_count", fill_value=0
-    )
+    # # Create Artist-User Matrix
+    # artist_user_df = (
+    #     df.groupby(["artistname", "user_id"]).size().reset_index(name="track_count")
+    # )
+    # artist_user_matrix = artist_user_df.pivot_table(
+    #     index="artistname", columns="user_id", values="track_count", fill_value=0
+    # )
 
-    # Normalize Data
-    scaler = StandardScaler()
-    artist_user_matrix_scaled = scaler.fit_transform(artist_user_matrix)
-    artist_user_matrix_scaled_df = pd.DataFrame(
-        artist_user_matrix_scaled,
-        index=artist_user_matrix.index,
-        columns=artist_user_matrix.columns,
-    )
+    # # Normalize Data
+    # scaler = StandardScaler()
+    # artist_user_matrix_scaled = scaler.fit_transform(artist_user_matrix)
+    # artist_user_matrix_scaled_df = pd.DataFrame(
+    #     artist_user_matrix_scaled,
+    #     index=artist_user_matrix.index,
+    #     columns=artist_user_matrix.columns,
+    # )
 
-    # Dimensionality Reduction with Truncated SVD
-    svd = TruncatedSVD(n_components=2, random_state=42)
-    artist_user_pca = svd.fit_transform(artist_user_matrix_scaled_df)
-    artist_user_pca_df = pd.DataFrame(
-        artist_user_pca, index=artist_user_matrix.index, columns=["PCA1", "PCA2"]
-    )
+    # # Dimensionality Reduction with Truncated SVD
+    # svd = TruncatedSVD(n_components=2, random_state=42)
+    # artist_user_pca = svd.fit_transform(artist_user_matrix_scaled_df)
+    # artist_user_pca_df = pd.DataFrame(
+    #     artist_user_pca, index=artist_user_matrix.index, columns=["PCA1", "PCA2"]
+    # )
 
-    # Clustering with K-Means
-    optimal_k = 10
-    kmeans = KMeans(n_clusters=optimal_k, random_state=42, n_init=10)
-    user_clusters = kmeans.fit_predict(artist_user_pca_df)
-    artist_user_pca_df["cluster"] = user_clusters
+    # # Clustering with K-Means
+    # optimal_k = 10
+    # kmeans = KMeans(n_clusters=optimal_k, random_state=42, n_init=10)
+    # user_clusters = kmeans.fit_predict(artist_user_pca_df)
+    # artist_user_pca_df["cluster"] = user_clusters
 
-    # Silhouette Score
-    sil_score = silhouette_score(
-        artist_user_pca_df[["PCA1", "PCA2"]], artist_user_pca_df["cluster"]
-    )
-    st.subheader(f"⭐ Silhouette Score: {sil_score:.2f}")
+    # # Silhouette Score
+    # sil_score = silhouette_score(
+    #     artist_user_pca_df[["PCA1", "PCA2"]], artist_user_pca_df["cluster"]
+    # )
+    # st.subheader(f"⭐ Silhouette Score: {sil_score:.2f}")
 
-    # User Cluster Visualization
-    st.subheader("🎨 User Clusters Based on Artist Preferences")
-    fig = px.scatter(
-        artist_user_pca_df,
-        x="PCA1",
-        y="PCA2",
-        color=artist_user_pca_df["cluster"].astype(str),
-        title="Artist Clusters",
-        labels={"cluster": "Cluster"},
-    )
-    st.plotly_chart(fig)
+    # # User Cluster Visualization
+    # st.subheader("🎨 User Clusters Based on Artist Preferences")
+    # fig = px.scatter(
+    #     artist_user_pca_df,
+    #     x="PCA1",
+    #     y="PCA2",
+    #     color=artist_user_pca_df["cluster"].astype(str),
+    #     title="Artist Clusters",
+    #     labels={"cluster": "Cluster"},
+    # )
+    # st.plotly_chart(fig)
 
-    selected_user = st.selectbox(
-        "Select an Artist for Cluster-Based Recommendations", df["artistname"].unique()
-    )
-    if selected_user:
-        if selected_user in artist_user_pca_df.index:
-            user_cluster = artist_user_pca_df.loc[selected_user, "cluster"]
-            similar_users = artist_user_pca_df[artist_user_pca_df["cluster"] == user_cluster].index.tolist()
-            st.write(f"👥 Users in the same cluster as {selected_user}: {similar_users}")
-        else:
-            st.error(f"User {selected_user} is not found in the clustering results. Please select another user.")
+    # selected_user = st.selectbox(
+    #     "Select an Artist for Cluster-Based Recommendations", df["artistname"].unique()
+    # )
+    # if selected_user:
+    #     if selected_user in artist_user_pca_df.index:
+    #         user_cluster = artist_user_pca_df.loc[selected_user, "cluster"]
+    #         similar_users = artist_user_pca_df[artist_user_pca_df["cluster"] == user_cluster].index.tolist()
+    #         st.write(f"👥 Users in the same cluster as {selected_user}: {similar_users}")
+    #     else:
+    #         st.error(f"User {selected_user} is not found in the clustering results. Please select another user.")
