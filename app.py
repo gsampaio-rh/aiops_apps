@@ -134,6 +134,61 @@ if uploaded_file:
             st.success("✅ Done!")
             st.write("🎤 Recommended Artists:", recommendations if recommendations else "No recommendations found.")
 
+    def display_collaborative_filtering_matrix(selected_user, top_n=5):
+        if selected_user not in similarity_df.index:
+            st.warning("Selected user not found in similarity matrix.")
+            return
+
+        # Get top N similar users (excluding self)
+        similar_users = (
+            similarity_df[selected_user]
+            .sort_values(ascending=False)
+            .iloc[1 : top_n + 1]  # Exclude the selected user
+            .index
+        )
+
+        # Get artists the selected user has interacted with
+        selected_user_artists = set(
+            user_artist_matrix.loc[selected_user][user_artist_matrix.loc[selected_user] > 0].index
+        )
+
+        # Filter user-artist matrix to only include the selected user and their top matches
+        filtered_matrix = user_artist_matrix.loc[[selected_user] + list(similar_users)]
+
+        # Highlight recommended artists (artists that similar users like but the selected user hasn't listened to)
+        recommended_artists = set()
+        for similar_user in similar_users:
+            similar_user_artists = set(
+                user_artist_matrix.loc[similar_user][user_artist_matrix.loc[similar_user] > 0].index
+            )
+            new_recommendations = similar_user_artists - selected_user_artists
+            recommended_artists.update(new_recommendations)
+
+        # Only show relevant columns (artists that are either liked by the selected user or recommended)
+        relevant_artists = selected_user_artists.union(recommended_artists)
+        filtered_matrix = filtered_matrix[filtered_matrix.columns.intersection(relevant_artists)]
+
+        # Generate heatmap with annotations
+        fig, ax = plt.subplots(figsize=(12, 6))
+        sns.heatmap(
+            filtered_matrix, cmap="coolwarm", annot=True, fmt=".0f", linewidths=0.5
+        )
+        plt.xlabel("Artists")
+        plt.ylabel("Users")
+        plt.title(f"Collaborative Filtering Matrix - Top {top_n} Matched Users")
+
+        # Display recommended artists separately
+        st.markdown(f"🎵 **Recommended Artists for {selected_user}:**")
+        for artist in recommended_artists:
+            st.write(f"🎶 {artist}")
+
+        # Display heatmap in Streamlit
+        st.pyplot(fig)
+
+    if st.button("🎭 Collaborative Filtering Matrix"):
+        # Call the function after collaborative filtering computations
+        display_collaborative_filtering_matrix(selected_user)
+
     # Network Graph Visualization
     def create_network_graph(user_id, top_n=5):
         G = nx.Graph()
@@ -238,13 +293,13 @@ if uploaded_file:
         x="PCA1",
         y="PCA2",
         color=artist_user_pca_df["cluster"].astype(str),
-        title="User Clusters",
+        title="Artist Clusters",
         labels={"cluster": "Cluster"},
     )
     st.plotly_chart(fig)
 
     selected_user = st.selectbox(
-        "Select a User ID for Cluster-Based Recommendations", df["artistname"].unique()
+        "Select an Artist for Cluster-Based Recommendations", df["artistname"].unique()
     )
     if selected_user:
         if selected_user in artist_user_pca_df.index:
