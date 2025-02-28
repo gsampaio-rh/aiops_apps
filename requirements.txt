@@ -9,3 +9,6 @@ scipy
 networkx
 graphviz
 langchain
+langchain-ollama
+faiss
+tiktoken
