@@ -101,25 +101,32 @@ if demo_mode == "RAG + Intelligent Search":
         split_docs = split_documents(documents)
         vector_store = create_vector_store(split_docs)
 
+# ---- Main Interface: System and User Prompts ----
+st.markdown("### Enter your Prompts")
+default_system_prompt = "You are a helpful IT operations assistant. Provide concise and factual recommendations based on system logs."
+default_user_prompt = "Summarize the last 10 critical errors in the Kubernetes logs and suggest potential fixes."
+
+system_prompt = st.text_area("System Prompt:", default_system_prompt, height=100)
+user_prompt = st.text_input("User Prompt:", default_user_prompt)
+
 # ---- Explanation of Prompts ----
-st.markdown("## Understanding Prompts")
-st.markdown(
-    """
-A **prompt** is the input we provide to the language model, and it consists of two key parts:
-
-1. **System Prompt:**  
-   This part defines the context, tone, and behavior of the model. It tells the model how it should behave.  
-   *Example:* "You are a helpful IT operations assistant. Provide concise and factual recommendations based on system logs."
-
-2. **User Prompt:**  
-   This is the actual question or task provided by the user. It specifies what information or action is required.  
-   *Example:* "Summarize the last 10 critical errors in the Kubernetes logs and suggest potential fixes."
-
-Together, these prompts ensure the model’s response is both context-aware and directly relevant to your query.
-"""
-)
-
 with st.expander("See a Sample Prompt Breakdown"):
+    st.markdown("## Understanding Prompts")
+    st.markdown(
+        """
+    A **prompt** is the input we provide to the language model, and it consists of two key parts:
+
+    1. **System Prompt:**  
+    This part defines the context, tone, and behavior of the model. It tells the model how it should behave.  
+    *Example:* "You are a helpful IT operations assistant. Provide concise and factual recommendations based on system logs."
+
+    2. **User Prompt:**  
+    This is the actual question or task provided by the user. It specifies what information or action is required.  
+    *Example:* "Summarize the last 10 critical errors in the Kubernetes logs and suggest potential fixes."
+
+    Together, these prompts ensure the model’s response is both context-aware and directly relevant to your query.
+    """
+    )
     st.markdown("### Sample Prompt Breakdown")
     sample_system = "You are a helpful IT operations assistant. Provide concise and factual recommendations based on system logs."
     sample_user = "Summarize the last 10 critical errors in the Kubernetes logs and suggest potential fixes."
@@ -136,24 +143,6 @@ with st.expander("See a Sample Prompt Breakdown"):
     """,
         unsafe_allow_html=True,
     )
-    st.markdown(
-        """
-    **How It Works:**
-    - The **system prompt** sets the stage by guiding the model's behavior.
-    - The **user prompt** provides the direct question.
-    
-    Combined, they ensure the model understands both what to do and what is being asked.
-    """
-    )
-
-# ---- Main Interface: System and User Prompts ----
-st.markdown("### Enter your Prompts")
-default_system_prompt = "You are a helpful IT operations assistant. Provide concise and factual recommendations based on system logs."
-default_user_prompt = "Summarize the last 10 critical errors in the Kubernetes logs and suggest potential fixes."
-
-system_prompt = st.text_area("System Prompt:", default_system_prompt, height=100)
-user_prompt = st.text_input("User Prompt:", default_user_prompt)
-
 
 # ---- Visualization: How LLMs Work (Tokenization, Self-Attention & Embeddings) ----
 st.markdown("---")
