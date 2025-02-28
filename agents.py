@@ -30,56 +30,73 @@ st.markdown(
 
 # ---- HEADER ----
 st.markdown(
-    "<h1 class='header'>Agents</h1>",
+    "<h1 class='header'>AI-Powered Incident Management for DevOps</h1>",
     unsafe_allow_html=True,
 )
 
 # ---- LLM SETUP ----
-llm = Ollama(model="llama3.1:latest")
+llm = Ollama(model="mistral")
 memory = ConversationBufferMemory(memory_key="chat_history")
 
 
 # ---- TOOL FUNCTIONS ----
 @tool
-def get_weather(city: str):
-    """Fetches real-time weather data from a public API."""
-    api_url = f"https://wttr.in/{city}?format=%C+%t"
+def get_server_logs():
+    """Fetches recent server logs from a public API."""
+    api_url = "https://raw.githubusercontent.com/elastic/examples/master/Common%20Data%20Formats/nginx_logs/nginx_logs"
     response = requests.get(api_url)
     return (
-        response.text
+        response.text[:500]
         if response.status_code == 200
-        else "Could not fetch weather data."
+        else "Could not fetch server logs."
     )
 
 
 @tool
-def get_air_quality(city: str):
-    """Fetches real-time air quality index (AQI) from a public API."""
-    api_url = (
-        f"https://api.waqi.info/feed/{city}/?token=demo"  # Replace with a valid API key
-    )
+def check_incidents():
+    """Fetches current infrastructure incidents from a public API."""
+    api_url = "https://www.githubstatus.com/api/v2/status.json"
     response = requests.get(api_url)
-    if response.status_code == 200:
-        data = response.json()
-        return (
-            f"AQI: {data['data']['aqi']}, Status: {data['data']['dominentpol']}"
-            if "data" in data
-            else "No data available."
-        )
-    return "Could not fetch AQI data."
+    return (
+        response.json()
+        if response.status_code == 200
+        else "Could not fetch incident data."
+    )
+
+
+@tool
+def suggest_fix():
+    """Suggests a fix based on recent log patterns."""
+    return "Based on the logs, the issue appears to be a high error rate in Nginx. Recommended action: Restart the Nginx service."
+
+
+@tool
+def restart_service():
+    """Simulated action: Restarting Nginx service."""
+    return "Nginx service restarted successfully. Monitoring for further issues."
 
 
 # ---- INITIALIZE AGENT ----
 tools = [
     Tool(
-        name="Get Weather",
-        func=get_weather,
-        description="Fetches current weather conditions.",
+        name="Fetch Server Logs",
+        func=get_server_logs,
+        description="Retrieves recent logs for troubleshooting.",
     ),
     Tool(
-        name="Get Air Quality",
-        func=get_air_quality,
-        description="Fetches air quality index (AQI) data.",
+        name="Check Incidents",
+        func=check_incidents,
+        description="Gets current system status and active incidents.",
+    ),
+    Tool(
+        name="Suggest Fix",
+        func=suggest_fix,
+        description="Analyzes logs and suggests a resolution.",
+    ),
+    Tool(
+        name="Restart Service",
+        func=restart_service,
+        description="Executes a restart action for a failing service.",
     ),
 ]
 
@@ -93,10 +110,11 @@ agent = initialize_agent(
 
 # ---- USER INTERACTION ----
 user_prompt = st.text_area(
-    "📝 Enter a city to get real-time weather and air quality:", "San Francisco"
+    "📝 Describe your issue (e.g., 'High CPU usage on server-42'):",
+    "Nginx service is failing intermittently.",
 )
 
-if st.button("Run Autonomous Agent"):
+if st.button("Run AI Troubleshooting Agent"):
     with st.spinner("🤖 AI Agent Thinking..."):
         try:
             response = agent.run(user_prompt, callbacks=[StreamlitCallbackHandler(st)])
@@ -130,3 +148,23 @@ if st.button("Run Autonomous Agent"):
                 unsafe_allow_html=True,
             )
         time.sleep(1)
+
+    # ---- GRAPH VISUALIZATION ----
+    st.markdown("### 📊 AI Reasoning Flow")
+    G = nx.DiGraph()
+    G.add_edge("User Request", "Fetch Server Logs")
+    G.add_edge("Fetch Server Logs", "Analyze Logs")
+    G.add_edge("Analyze Logs", "Suggest Fix")
+    G.add_edge("Suggest Fix", "Execute Fix")
+    pos = nx.spring_layout(G)
+    plt.figure(figsize=(6, 4))
+    nx.draw(
+        G,
+        pos,
+        with_labels=True,
+        node_color="skyblue",
+        edge_color="gray",
+        node_size=3000,
+        font_size=10,
+    )
+    st.pyplot(plt)
