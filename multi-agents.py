@@ -102,7 +102,9 @@ supervisor_prompt = (
 
 def supervisor_node(state: MessagesState) -> Command[Literal[*members, "__end__"]]:
     user_message = state["messages"][-1].content  # Fix: Access content directly
+    st.write(user_message)
     response = llm.invoke(supervisor_prompt + "\nUser Message: " + user_message)
+    st.code(response)
     try:
         response_json = json.loads(response)
         next_step = response_json.get("next_step", "FINISH")
@@ -146,6 +148,15 @@ builder.add_node("action_executor", action_executor_node)
 
 graph = builder.compile()
 
+
+def display_message(label, message, class_name):
+    """Utility function to display formatted messages."""
+    st.markdown(
+        f"<div class='{class_name}'><b>{label}:</b><br>{message}</div>",
+        unsafe_allow_html=True,
+    )
+
+
 # ---- USER INTERACTION ----
 user_prompt = st.text_area(
     "📝 Describe your issue:", "Nginx service is failing intermittently."
@@ -155,31 +166,15 @@ if st.button("Run AI Supervisor"):
     with st.spinner("🤖 AI Agents Collaborating..."):
         try:
             for step in graph.stream({"messages": [HumanMessage(content=user_prompt)]}):
-                st.markdown(
-                    f"<div class='agent-thought'>{step}</div>", unsafe_allow_html=True
-                )
+                for agent, result in step.items():
+                    if agent == "supervisor":
+                        display_message(
+                            "Supervisor Decision", result, "supervisor-output"
+                        )
+                    else:
+                        display_message(
+                            f"{agent.capitalize()} Output", result, "agent-observation"
+                        )
                 time.sleep(1)
         except Exception as e:
-            st.markdown("### ❌ Error Occurred")
-            st.markdown(
-                f"<div class='error-message'>{str(e)}</div>", unsafe_allow_html=True
-            )
-
-    # ---- GRAPH VISUALIZATION ----
-    st.markdown("### 📊 Multi-Agent Workflow")
-    G = nx.DiGraph()
-    G.add_edge("User Request", "Supervisor")
-    for member in members:
-        G.add_edge("Supervisor", member)
-    pos = nx.spring_layout(G)
-    plt.figure(figsize=(6, 4))
-    nx.draw(
-        G,
-        pos,
-        with_labels=True,
-        node_color="skyblue",
-        edge_color="gray",
-        node_size=3000,
-        font_size=10,
-    )
-    st.pyplot(plt)
+            display_message("❌ Error Occurred", str(e), "error-message")
