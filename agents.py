@@ -10,6 +10,7 @@ from langchain.memory import ConversationBufferMemory
 from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
 from langchain.callbacks import StreamlitCallbackHandler
+import requests
 
 # ---- APP CONFIG ----
 st.set_page_config(page_title="Autonomous AI Agent Demo", layout="wide")
@@ -18,8 +19,9 @@ st.markdown(
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #f5f5f7; color: #1d1d1f; }
         .header { text-align: center; margin-top: 40px; font-size: 2em; font-weight: bold; }
-        .agent-thought { background: #f1f8ff; padding: 10px; border-radius: 5px; }
-        .agent-action { background: #e3fcef; padding: 10px; border-radius: 5px; }
+        .agent-thought { background: #f1f8ff; padding: 10px; border-radius: 5px; font-family: monospace; }
+        .agent-action { background: #e3fcef; padding: 10px; border-radius: 5px; font-family: monospace; }
+        .agent-observation { background: #fff8e1; padding: 10px; border-radius: 5px; font-family: monospace; }
         .error-message { background: #ffebee; padding: 10px; border-radius: 5px; color: #b71c1c; }
     </style>
     """,
@@ -28,7 +30,7 @@ st.markdown(
 
 # ---- HEADER ----
 st.markdown(
-    "<h1 class='header'>Agents</h1>",
+    "<h1 class='header'>O Futuro das Operações – Agentes Autônomos</h1>",
     unsafe_allow_html=True,
 )
 
@@ -39,28 +41,45 @@ memory = ConversationBufferMemory(memory_key="chat_history")
 
 # ---- TOOL FUNCTIONS ----
 @tool
-def check_server_status(input_text: str = ""):
-    """Simulated function that returns the server status."""
-    return "Server CPU at 95%. Possible overload detected."
+def get_weather(city: str):
+    """Fetches real-time weather data from a public API."""
+    api_url = f"https://wttr.in/{city}?format=%C+%t"
+    response = requests.get(api_url)
+    return (
+        response.text
+        if response.status_code == 200
+        else "Could not fetch weather data."
+    )
 
 
 @tool
-def restart_server(input_text: str = ""):
-    """Simulated function that restarts a failing server."""
-    return "Server restarted successfully. Monitoring for further issues."
+def get_air_quality(city: str):
+    """Fetches real-time air quality index (AQI) from a public API."""
+    api_url = (
+        f"https://api.waqi.info/feed/{city}/?token=demo"  # Replace with a valid API key
+    )
+    response = requests.get(api_url)
+    if response.status_code == 200:
+        data = response.json()
+        return (
+            f"AQI: {data['data']['aqi']}, Status: {data['data']['dominentpol']}"
+            if "data" in data
+            else "No data available."
+        )
+    return "Could not fetch AQI data."
 
 
 # ---- INITIALIZE AGENT ----
 tools = [
     Tool(
-        name="check_server_status",
-        func=check_server_status,
-        description="Checks the server health.",
+        name="Get Weather",
+        func=get_weather,
+        description="Fetches current weather conditions.",
     ),
     Tool(
-        name="restart_server",
-        func=restart_server,
-        description="Restarts the server if needed.",
+        name="Get Air Quality",
+        func=get_air_quality,
+        description="Fetches air quality index (AQI) data.",
     ),
 ]
 
@@ -74,8 +93,7 @@ agent = initialize_agent(
 
 # ---- USER INTERACTION ----
 user_prompt = st.text_area(
-    "📝 Enter an operational issue (e.g., 'Fix high CPU usage'):",
-    "Check the server health and resolve any issues.",
+    "📝 Enter a city to get real-time weather and air quality:", "San Francisco"
 )
 
 if st.button("Run Autonomous Agent"):
@@ -84,7 +102,8 @@ if st.button("Run Autonomous Agent"):
             response = agent.run(user_prompt, callbacks=[StreamlitCallbackHandler(st)])
             st.markdown("### 🤖 Agent Response")
             st.markdown(
-                f"<div class='agent-action'>{response}</div>", unsafe_allow_html=True
+                f"<div class='agent-action'><b>Action:</b><br>{response}</div>",
+                unsafe_allow_html=True,
             )
         except Exception as e:
             st.markdown("### ❌ Error Occurred")
@@ -95,9 +114,19 @@ if st.button("Run Autonomous Agent"):
     # ---- THOUGHT PROCESS VISUALIZATION ----
     st.markdown("### 🔄 Thought Process")
     for step in agent.memory.chat_memory.messages:
-        st.markdown(
-            f"<div class='agent-thought'>🧠 {step.content}</div>",
-            unsafe_allow_html=True,
-        )
+        if "Thought:" in step.content:
+            st.markdown(
+                f"<div class='agent-thought'><b>Thought:</b><br>{step.content}</div>",
+                unsafe_allow_html=True,
+            )
+        elif "Action:" in step.content:
+            st.markdown(
+                f"<div class='agent-action'><b>Action:</b><br>{step.content}</div>",
+                unsafe_allow_html=True,
+            )
+        elif "Observation:" in step.content:
+            st.markdown(
+                f"<div class='agent-observation'><b>Observation:</b><br>{step.content}</div>",
+                unsafe_allow_html=True,
+            )
         time.sleep(1)
-
