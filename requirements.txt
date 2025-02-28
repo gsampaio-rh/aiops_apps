@@ -12,3 +12,4 @@ langchain
 langchain-ollama
 faiss-cpu
 tiktoken
+langgraph
