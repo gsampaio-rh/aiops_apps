@@ -10,5 +10,5 @@ networkx
 graphviz
 langchain
 langchain-ollama
-faiss
+faiss-cpu
 tiktoken

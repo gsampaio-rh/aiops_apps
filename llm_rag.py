@@ -5,6 +5,8 @@ import plotly.express as px
 import requests, json
 import os
 import random
+import networkx as nx
+import matplotlib.pyplot as plt
 from langchain.document_loaders import TextLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
@@ -218,6 +220,87 @@ if user_prompt:
     with st.expander("Embeddings Matrix"):
         st.write(embeddings_matrix)
 
+# ---- File Upload for RAG ----
+
+if demo_mode == "RAG + Intelligent Search":
+    uploaded_file = st.file_uploader("Upload a Markdown file for RAG:", type=["md"])
+
+    if uploaded_file is not None:
+        file_path = f"./temp_{uploaded_file.name}"
+        with open(file_path, "wb") as f:
+            f.write(uploaded_file.getbuffer())
+
+        with st.spinner("Loading the file into a vector store database..."):
+            # Load Markdown file
+            loader = TextLoader(file_path)
+            documents = loader.load()
+
+            # Split document into chunks
+            text_splitter = RecursiveCharacterTextSplitter(
+                chunk_size=500, chunk_overlap=100
+            )
+            docs = text_splitter.split_documents(documents)
+
+            # Convert to LangChain Document format
+            formatted_docs = [Document(page_content=chunk.page_content) for chunk in docs]
+
+            # Embed documents and store them in FAISS
+            embedding_model = OllamaEmbeddings(model=selected_model)
+            vector_store = FAISS.from_documents(formatted_docs, embedding_model)
+
+            st.success(f"Uploaded and processed `{uploaded_file.name}` successfully!")
+
+            # Now, use the vector store to retrieve relevant documents
+            retriever = vector_store.as_retriever()
+            results = retriever.get_relevant_documents(user_prompt)
+            context = "\n".join([doc.page_content for doc in results[:3]])
+
+        # # Construct the RAG prompt
+        # rag_prompt = f"Answer the question based on the following context:\n\n{context}\n\nQuestion: {user_prompt}"
+
+        # with st.spinner("Generating response using RAG..."):
+        #     rag_response = get_llm_response(
+        #         system_prompt, rag_prompt, temperature=temperature
+        #     )
+
+        # st.markdown("### RAG Response:")
+        # st.markdown(f"> {rag_response}")
+
+
+# ---- Node-Based Retrieval Visualization ----
+def visualize_retrieval(query, retrieved_docs):
+    G = nx.DiGraph()
+
+    # Add query node
+    G.add_node("User Query", color="red", size=1200)
+
+    # Add retrieved documents as nodes
+    for idx, doc in enumerate(retrieved_docs):
+        G.add_node(f"Doc {idx+1}", color="blue", size=1000)
+        G.add_edge("User Query", f"Doc {idx+1}")
+
+    # Plot the graph
+    pos = nx.spring_layout(G, seed=42)  # Fixed seed for consistent layout
+    plt.figure(figsize=(6, 4))
+
+    # Extract colors & sizes
+    node_colors = [G.nodes[n]["color"] for n in G.nodes()]
+    node_sizes = [G.nodes[n]["size"] for n in G.nodes()]
+
+    nx.draw(
+        G,
+        pos,
+        with_labels=True,
+        node_color=node_colors,
+        node_size=node_sizes,
+        font_size=10,
+        edge_color="gray",
+    )
+
+    # Show visualization
+    st.pyplot(plt)
+
+
 st.markdown("---")
 # ---- Send Request Button & Main Q&A Execution ----
 if st.button("Send Request to LLM"):
@@ -243,15 +326,39 @@ if st.button("Send Request to LLM"):
             st.markdown(highlighted_response, unsafe_allow_html=True)
         elif demo_mode == "RAG + Intelligent Search":
             st.markdown("### Retrieving Contextual Data...")
-            retriever = vector_store.as_retriever()
-            results = retriever.get_relevant_documents(user_prompt)
-            context = "\n".join([doc.page_content for doc in results[:3]])
-            st.markdown("#### Retrieved Context:")
-            st.markdown(context)
-            rag_prompt = f"Answer the question based on the following context:\n\n{context}\n\nQuestion: {user_prompt}"
-            with st.spinner("Generating response using RAG..."):
-                rag_response = get_llm_response(
-                    system_prompt, rag_prompt, temperature=temperature
-                )
-            st.markdown("### RAG Response:")
-            st.markdown(f"> {rag_response}")
+            if uploaded_file is not None:
+                retriever = vector_store.as_retriever()
+                results = retriever.get_relevant_documents(user_prompt)
+                context = "\n".join([doc.page_content for doc in results[:3]])
+
+                st.markdown("#### 🔍 Retrieval Process")
+                with st.expander("Node-Based Retrieval Visualization"):
+                    visualize_retrieval(user_prompt, results)
+
+                with st.expander("📄 Retrieved Context"):
+                    retrieved_container = st.container()  # Use container instead of nested expanders
+
+                    for i, doc in enumerate(results[:4]):
+                        with retrieved_container:
+                            st.markdown(f"**🔹 Document {i+1}**")
+                            st.info(doc.page_content[:500])  # Display first 500 chars
+
+                rag_prompt = f"Answer the question based on the following context:\n\n{context}\n\nQuestion: {user_prompt}"
+                with st.spinner("Generating response using RAG..."):
+                    rag_response = get_llm_response(
+                        system_prompt, rag_prompt, temperature=temperature
+                    )
+                st.markdown("### RAG Response:")
+                highlighted_response = f"""
+                <div style="
+                    background-color: #e0f7fa;
+                    border-left: 4px solid #00796b;
+                    padding: 20px;
+                    margin: 20px 0;
+                    border-radius: 8px;
+                    font-size: 1.1em;
+                    line-height: 1.5;">
+                    {rag_response}
+                </div>
+                """
+                st.markdown(highlighted_response, unsafe_allow_html=True)
