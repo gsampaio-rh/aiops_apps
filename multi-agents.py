@@ -77,10 +77,11 @@ members = ["log_analyzer", "incident_monitor", "fix_suggester", "action_executor
 options = members + ["FINISH"]
 
 # ---- SUPERVISOR PROMPT ----
+# ---- SUPERVISOR PROMPT ----
 supervisor_prompt = (
     "You are an AI-powered supervisor responsible for coordinating an automated incident response system. "
     "Your task is to assign troubleshooting steps to specialized agents based on the issue described. "
-    "Each agent has a specific role and must be selected sequentially. Return the next step in JSON format. "
+    "Each agent has a specific role and must be selected sequentially. Return the next step in proper JSON format. "
     "\n\nAgents Available:"
     "\n- `log_analyzer`: Fetches server logs and identifies potential errors."
     "\n- `incident_monitor`: Checks system-wide incidents and service status."
@@ -90,18 +91,20 @@ supervisor_prompt = (
     "\n1. Analyze the user message."
     "\n2. Determine the most appropriate agent for the next action."
     "\n3. Generate a 'thought' to explain the reasoning behind your selection."
-    "\n4. Return the agent selection and thought in the following JSON format:"
-    "\n```json"
-    '{ "thought": "reasoning", "next_step": "agent_name" }'
-    "```"
-    '\n5. If all steps are complete, return `{ "thought": "The issue has been fully resolved.", "next_step": "FINISH" }`.'
+    "\n4. Return the agent selection and thought strictly in the following JSON format:"
+    "\n"
+    '{"thought": "reasoning", "next_step": "agent_name"}'
+    ""
+    "\nEnsure that the output is always a valid JSON structure, without extra formatting or characters outside the JSON block."
+    '\n5. If all steps are complete, return `{"thought": "The issue has been fully resolved.", "next_step": "FINISH"}`.'
     "\n\n### Example Outputs:"
-    '\nUser reports: \'Server is down\' → `{ "thought": "To diagnose the issue, fetching logs is the first step.", "next_step": "log_analyzer" }`'
-    '\nLogs show high CPU usage → `{ "thought": "High CPU usage suggests a system-wide issue. Checking incidents.", "next_step": "incident_monitor" }`'
-    '\nIncident detected → `{ "thought": "An incident has been identified. A fix should be suggested.", "next_step": "fix_suggester" }`'
-    '\nFix suggested → `{ "thought": "A fix is available. Executing it now.", "next_step": "action_executor" }`'
-    '\nFix executed successfully → `{ "thought": "The issue has been fully resolved.", "next_step": "FINISH" }`'
+    '\nUser reports: \'Server is down\' → `{"thought": "To diagnose the issue, fetching logs is the first step.", "next_step": "log_analyzer"}`'
+    '\nLogs show high CPU usage → `{"thought": "High CPU usage suggests a system-wide issue. Checking incidents.", "next_step": "incident_monitor"}`'
+    '\nIncident detected → `{"thought": "An incident has been identified. A fix should be suggested.", "next_step": "fix_suggester"}`'
+    '\nFix suggested → `{"thought": "A fix is available. Executing it now.", "next_step": "action_executor"}`'
+    '\nFix executed successfully → `{"thought": "The issue has been fully resolved.", "next_step": "FINISH"}`'
 )
+
 
 def supervisor_node(state: MessagesState) -> Command[Literal[*members, "__end__"]]:
     user_message = state["messages"][-1].content  # Fix: Access content directly
