@@ -12,6 +12,55 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
 from langchain_ollama import OllamaEmbeddings
 from langchain.vectorstores import FAISS
+import seaborn as sns
+import pandas as pd
+
+
+# ---- Simple Embedding Matrix Visualization ----
+def visualize_embedding_matrix(retrieved_docs, vector_store):
+    """
+    Displays the vector embeddings stored in FAISS as a heatmap.
+    Highlights retrieved document vectors separately.
+    """
+    with st.spinner("📊 Generating embedding matrix visualization..."):
+        # Extract stored document vectors from FAISS
+        stored_vectors = vector_store.index.reconstruct_n(0, vector_store.index.ntotal)
+
+        # Convert to Pandas DataFrame for visualization
+        df_embeddings = pd.DataFrame(stored_vectors)
+
+        # Assign names for readability
+        df_embeddings.index = [f"Doc {i+1}" for i in range(len(stored_vectors))]
+
+        # Highlight retrieved documents in a different color
+        retrieved_indices = []
+        for doc in retrieved_docs:
+            try:
+                idx = vector_store.index.search(
+                    np.array(doc.embedding).reshape(1, -1), 1
+                )[1][0][0]
+                retrieved_indices.append(idx)
+            except:
+                continue
+
+        fig, ax = plt.subplots(figsize=(10, 5))
+        sns.heatmap(df_embeddings, cmap="coolwarm", cbar=True, ax=ax)
+
+        # Annotate retrieved documents
+        for idx in retrieved_indices:
+            ax.add_patch(
+                plt.Rectangle(
+                    (0, idx),
+                    len(df_embeddings.columns),
+                    1,
+                    fill=False,
+                    edgecolor="yellow",
+                    lw=2,
+                )
+            )
+
+        plt.title("📊 Vector Store Embedding Matrix")
+        st.pyplot(fig)
 
 
 # ---- Function: Call LLM Endpoint with System & User Prompts ----
@@ -65,12 +114,14 @@ demo_mode = st.sidebar.radio(
     "Select Demo Mode", ("LLM Only", "RAG + Intelligent Search")
 )
 
+
 # ---- Generate Random Colors for Tokens ----
 def random_pastel_color():
     r = random.randint(150, 255)
     g = random.randint(150, 255)
     b = random.randint(150, 255)
     return f"rgb({r}, {g}, {b})"
+
 
 # ---- Tokenizer Method ----
 def tokenize_text(text):
@@ -242,7 +293,9 @@ if demo_mode == "RAG + Intelligent Search":
             docs = text_splitter.split_documents(documents)
 
             # Convert to LangChain Document format
-            formatted_docs = [Document(page_content=chunk.page_content) for chunk in docs]
+            formatted_docs = [
+                Document(page_content=chunk.page_content) for chunk in docs
+            ]
 
             # Embed documents and store them in FAISS
             embedding_model = OllamaEmbeddings(model=selected_model)
@@ -329,16 +382,21 @@ if st.button("Send Request to LLM"):
             if uploaded_file is not None:
                 retriever = vector_store.as_retriever()
                 results = retriever.get_relevant_documents(user_prompt)
-                context = "\n".join([doc.page_content for doc in results[:3]])
+                context = "\n".join([doc.page_content for doc in results])
 
                 st.markdown("#### 🔍 Retrieval Process")
                 with st.expander("Node-Based Retrieval Visualization"):
                     visualize_retrieval(user_prompt, results)
 
-                with st.expander("📄 Retrieved Context"):
-                    retrieved_container = st.container()  # Use container instead of nested expanders
+                with st.expander("📊 Vector Store Representation"):
+                    visualize_embedding_matrix(results, vector_store)
 
-                    for i, doc in enumerate(results[:4]):
+                with st.expander("📄 Retrieved Context"):
+                    retrieved_container = (
+                        st.container()
+                    )  # Use container instead of nested expanders
+
+                    for i, doc in enumerate(results):
                         with retrieved_container:
                             st.markdown(f"**🔹 Document {i+1}**")
                             st.info(doc.page_content[:500])  # Display first 500 chars
