@@ -30,7 +30,7 @@ st.markdown(
 
 # ---- HEADER ----
 st.markdown(
-    "<h1 class='header'>O Futuro das Operações – Agentes Autônomos</h1>",
+    "<h1 class='header'>Agents</h1>",
     unsafe_allow_html=True,
 )
 
