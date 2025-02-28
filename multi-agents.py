@@ -162,6 +162,30 @@ def display_message(label, message, class_name):
         unsafe_allow_html=True,
     )
 
+with st.expander("🥸 Supervisor Prompt"):
+    st.code(
+        f"""
+        {supervisor_prompt} 
+        """,
+        language="text",
+    )
+
+with st.expander("⛓️ Graph"):
+    st.code(
+        """
+        # ---- BUILDING THE MULTI-AGENT GRAPH ----
+builder = StateGraph(MessagesState)
+builder.add_edge(START, "supervisor")
+builder.add_node("supervisor", supervisor_node)
+builder.add_node("log_analyzer", log_analyzer_node)
+builder.add_node("incident_monitor", incident_monitor_node)
+builder.add_node("fix_suggester", fix_suggester_node)
+builder.add_node("action_executor", action_executor_node)
+
+graph = builder.compile()
+        """,
+        language="text",
+    )
 
 # ---- USER INTERACTION ----
 user_prompt = st.text_area(
