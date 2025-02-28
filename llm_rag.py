@@ -278,7 +278,7 @@ if demo_mode == "RAG + Intelligent Search":
     uploaded_file = st.file_uploader("Upload a Markdown file for RAG:", type=["md"])
 
     if uploaded_file is not None:
-        file_path = f"./temp_{uploaded_file.name}"
+        file_path = f"./data/temp_{uploaded_file.name}"
         with open(file_path, "wb") as f:
             f.write(uploaded_file.getbuffer())
 
