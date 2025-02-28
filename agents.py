@@ -38,6 +38,144 @@ st.markdown(
 llm = Ollama(model="mistral")
 memory = ConversationBufferMemory(memory_key="chat_history")
 
+# ---- EXPANDERS ----
+st.markdown("### ℹ️ Understanding AI Troubleshooting")
+with st.expander("🔧 View Tool Implementations"):
+    st.code(
+        """
+@tool
+def get_server_logs():
+    "Fetches recent server logs from a public API."
+    api_url = "https://raw.githubusercontent.com/elastic/examples/master/Common%20Data%20Formats/nginx_logs/nginx_logs"
+    response = requests.get(api_url)
+    return response.text[:500] if response.status_code == 200 else "Could not fetch server logs."
+    
+@tool
+def check_incidents():
+    "Fetches current infrastructure incidents from a public API."
+    api_url = "https://status.github.com/api/status.json"
+    response = requests.get(api_url)
+    return (
+        response.json()
+        if response.status_code == 200
+        else "Could not fetch incident data."
+    )
+        """,
+        language="python",
+    )
+
+with st.expander("🤖 Agent Configuration"):
+    st.code(
+        """
+from langchain.agents import initialize_agent, Tool
+
+agent = initialize_agent(
+    tools=tools,
+    llm=llm,
+    agent="zero-shot-react-description",
+    memory=memory,
+    verbose=True,
+)
+        """,
+        language="python",
+    )
+
+with st.expander("🧠 How ReAct Works"):
+    st.write(
+        "ReAct (Reasoning + Acting) is a framework where the AI agent iterates between thought, action, and observation."
+    )
+    st.image(
+        "https://miro.medium.com/v2/resize:fit:1400/format:webp/1*JJ-sEMmE-ui-WcbhwOBmPw.png",
+        caption="ReAct Framework",
+    )
+    st.code(
+        """
+================================ Human Message =================================
+
+What is 10+10?
+================================== Ai Message ==================================
+
+{
+    "thought": "The problem requires a basic arithmetic operation, so I will use the 'basic_calculator' tool.",
+    "action": "basic_calculator",
+    "action_input": {
+        "num1": 10,
+        "num2": 10,
+        "operation": "add"
+    }
+}
+================================ System Message ================================
+
+The answer is: 20.
+Calculated with basic_calculator.
+================================== Ai Message ==================================
+
+{
+    "answer": "I have the answer: 20."
+}
+        """
+    )
+
+with st.expander("📝 View AI Prompt"):
+    st.code(
+        """
+        <|begin_of_text|><|start_header_id|>system<|end_header_id|>
+        
+        You are an expert in composing functions. You are given a question and a set of possible functions.
+        Based on the question, you will need to make one or more function/tool calls to achieve the purpose.
+        If none of the functions can be used, point it out. If the given question lacks the parameters required by the function, also point it out.
+        You should only return the function call in tools call sections.
+        
+        If you decide to invoke any of the function(s), you MUST put it in the format of [func_name1(params_name1=params_value1, params_name2=params_value2...), func_name2(params)]
+        You SHOULD NOT include any other text in the response.
+        
+        Here is a list of functions in JSON format that you can invoke.
+        
+        [
+            {
+                "name": "get_server_logs",
+                "description": "Fetches recent server logs from a public API.",
+                "parameters": {
+                    "type": "dict",
+                    "required": [],
+                    "properties": {}
+                }
+            },
+            {
+                "name": "check_incidents",
+                "description": "Gets current system status and active incidents.",
+                "parameters": {
+                    "type": "dict",
+                    "required": [],
+                    "properties": {}
+                }
+            },
+            {
+                "name": "suggest_fix",
+                "description": "Analyzes logs and suggests a resolution.",
+                "parameters": {
+                    "type": "dict",
+                    "required": [],
+                    "properties": {}
+                }
+            },
+            {
+                "name": "restart_service",
+                "description": "Executes a restart action for a failing service.",
+                "parameters": {
+                    "type": "dict",
+                    "required": [],
+                    "properties": {}
+                }
+            }
+        ]<|eot_id|><|start_header_id|>user<|end_header_id|>
+        
+        The server is experiencing high error rates.<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+        [get_server_logs(), check_incidents()]
+        """,
+        language="text",
+    )
+
 
 # ---- TOOL FUNCTIONS ----
 @tool
@@ -55,7 +193,7 @@ def get_server_logs():
 @tool
 def check_incidents():
     """Fetches current infrastructure incidents from a public API."""
-    api_url = "https://www.githubstatus.com/api/v2/status.json"
+    api_url = "https://status.github.com/api/status.json"
     response = requests.get(api_url)
     return (
         response.json()
@@ -128,43 +266,3 @@ if st.button("Run AI Troubleshooting Agent"):
             st.markdown(
                 f"<div class='error-message'>{str(e)}</div>", unsafe_allow_html=True
             )
-
-    # ---- THOUGHT PROCESS VISUALIZATION ----
-    st.markdown("### 🔄 Thought Process")
-    for step in agent.memory.chat_memory.messages:
-        if "Thought:" in step.content:
-            st.markdown(
-                f"<div class='agent-thought'><b>Thought:</b><br>{step.content}</div>",
-                unsafe_allow_html=True,
-            )
-        elif "Action:" in step.content:
-            st.markdown(
-                f"<div class='agent-action'><b>Action:</b><br>{step.content}</div>",
-                unsafe_allow_html=True,
-            )
-        elif "Observation:" in step.content:
-            st.markdown(
-                f"<div class='agent-observation'><b>Observation:</b><br>{step.content}</div>",
-                unsafe_allow_html=True,
-            )
-        time.sleep(1)
-
-    # ---- GRAPH VISUALIZATION ----
-    st.markdown("### 📊 AI Reasoning Flow")
-    G = nx.DiGraph()
-    G.add_edge("User Request", "Fetch Server Logs")
-    G.add_edge("Fetch Server Logs", "Analyze Logs")
-    G.add_edge("Analyze Logs", "Suggest Fix")
-    G.add_edge("Suggest Fix", "Execute Fix")
-    pos = nx.spring_layout(G)
-    plt.figure(figsize=(6, 4))
-    nx.draw(
-        G,
-        pos,
-        with_labels=True,
-        node_color="skyblue",
-        edge_color="gray",
-        node_size=3000,
-        font_size=10,
-    )
-    st.pyplot(plt)
