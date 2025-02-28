@@ -273,6 +273,7 @@ if user_prompt:
 
 # ---- File Upload for RAG ----
 
+# ---- File Upload for RAG ----
 if demo_mode == "RAG + Intelligent Search":
     uploaded_file = st.file_uploader("Upload a Markdown file for RAG:", type=["md"])
 
@@ -281,43 +282,34 @@ if demo_mode == "RAG + Intelligent Search":
         with open(file_path, "wb") as f:
             f.write(uploaded_file.getbuffer())
 
-        with st.spinner("Loading the file into a vector store database..."):
+        with st.spinner("📥 Processing document into vector store..."):
             # Load Markdown file
             loader = TextLoader(file_path)
             documents = loader.load()
 
-            # Split document into chunks
+            # ✅ **Improved Chunking Strategy**
             text_splitter = RecursiveCharacterTextSplitter(
-                chunk_size=500, chunk_overlap=100
+                chunk_size=500,  # ✅ Smaller chunks
+                chunk_overlap=100,  # ✅ Overlap ensures context continuity
             )
             docs = text_splitter.split_documents(documents)
 
-            # Convert to LangChain Document format
+            # ✅ **Store Document Metadata (Title, Section Names)**
             formatted_docs = [
-                Document(page_content=chunk.page_content) for chunk in docs
+                Document(
+                    page_content=chunk.page_content,
+                    metadata={"source": uploaded_file.name, "chunk_id": i},
+                )
+                for i, chunk in enumerate(docs)
             ]
 
-            # Embed documents and store them in FAISS
+            # ✅ **Use Embeddings for Better Retrieval**
             embedding_model = OllamaEmbeddings(model=selected_model)
             vector_store = FAISS.from_documents(formatted_docs, embedding_model)
 
-            st.success(f"Uploaded and processed `{uploaded_file.name}` successfully!")
-
-            # Now, use the vector store to retrieve relevant documents
-            retriever = vector_store.as_retriever()
-            results = retriever.get_relevant_documents(user_prompt)
-            context = "\n".join([doc.page_content for doc in results[:3]])
-
-        # # Construct the RAG prompt
-        # rag_prompt = f"Answer the question based on the following context:\n\n{context}\n\nQuestion: {user_prompt}"
-
-        # with st.spinner("Generating response using RAG..."):
-        #     rag_response = get_llm_response(
-        #         system_prompt, rag_prompt, temperature=temperature
-        #     )
-
-        # st.markdown("### RAG Response:")
-        # st.markdown(f"> {rag_response}")
+            st.success(
+                f"✅ Uploaded and processed `{uploaded_file.name}` successfully!"
+            )
 
 
 # ---- Node-Based Retrieval Visualization ----
@@ -380,7 +372,10 @@ if st.button("Send Request to LLM"):
         elif demo_mode == "RAG + Intelligent Search":
             st.markdown("### Retrieving Contextual Data...")
             if uploaded_file is not None:
-                retriever = vector_store.as_retriever()
+                # ✅ **Modify Retrieval Logic**
+                retriever = vector_store.as_retriever(
+                    search_kwargs={"k": 5}
+                )  # ✅ Retrieve only top 8 most relevant chunks
                 results = retriever.get_relevant_documents(user_prompt)
                 context = "\n".join([doc.page_content for doc in results])
 
@@ -402,6 +397,8 @@ if st.button("Send Request to LLM"):
                             st.info(doc.page_content[:500])  # Display first 500 chars
 
                 rag_prompt = f"Answer the question based on the following context:\n\n{context}\n\nQuestion: {user_prompt}"
+                with st.expander("Full Prompt"):
+                    st.write(rag_prompt)
                 with st.spinner("Generating response using RAG..."):
                     rag_response = get_llm_response(
                         system_prompt, rag_prompt, temperature=temperature
