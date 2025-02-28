@@ -19,10 +19,12 @@ st.markdown(
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #f5f5f7; color: #1d1d1f; }
         .header { text-align: center; margin-top: 40px; font-size: 2em; font-weight: bold; }
-        .agent-thought { background: #f1f8ff; padding: 10px; border-radius: 5px; font-family: monospace; }
+        .agent-thought { background: #d6eaf8; padding: 10px; border-radius: 5px; font-family: monospace; }
         .agent-action { background: #e3fcef; padding: 10px; border-radius: 5px; font-family: monospace; }
         .agent-observation { background: #fff8e1; padding: 10px; border-radius: 5px; font-family: monospace; }
         .error-message { background: #ffebee; padding: 10px; border-radius: 5px; color: #b71c1c; }
+        .supervisor-input { background: #e3e7fc; padding: 10px; border-radius: 5px; font-family: monospace; }
+        .supervisor-output { background: #d6f5d6; padding: 10px; border-radius: 5px; font-family: monospace; }
     </style>
     """,
     unsafe_allow_html=True,
@@ -74,6 +76,7 @@ def restart_service():
 members = ["log_analyzer", "incident_monitor", "fix_suggester", "action_executor"]
 options = members + ["FINISH"]
 
+# ---- SUPERVISOR PROMPT ----
 supervisor_prompt = (
     "You are an AI-powered supervisor responsible for coordinating an automated incident response system. "
     "Your task is to assign troubleshooting steps to specialized agents based on the issue described. "
@@ -86,19 +89,19 @@ supervisor_prompt = (
     "\n\n### Instructions:"
     "\n1. Analyze the user message."
     "\n2. Determine the most appropriate agent for the next action."
-    "\n3. Return the agent selection in the following JSON format:"
+    "\n3. Generate a 'thought' to explain the reasoning behind your selection."
+    "\n4. Return the agent selection and thought in the following JSON format:"
     "\n```json"
-    '{ "next_step": "agent_name" }'
+    '{ "thought": "reasoning", "next_step": "agent_name" }'
     "```"
-    '\n4. If all steps are complete, return `{ "next_step": "FINISH" }`.'
+    '\n5. If all steps are complete, return `{ "thought": "The issue has been fully resolved.", "next_step": "FINISH" }`.'
     "\n\n### Example Outputs:"
-    '\nUser reports: \'Server is down\' → `{ "next_step": "log_analyzer" }`'
-    '\nLogs show high CPU usage → `{ "next_step": "incident_monitor" }`'
-    '\nIncident detected → `{ "next_step": "fix_suggester" }`'
-    '\nFix suggested → `{ "next_step": "action_executor" }`'
-    '\nFix executed successfully → `{ "next_step": "FINISH" }`'
+    '\nUser reports: \'Server is down\' → `{ "thought": "To diagnose the issue, fetching logs is the first step.", "next_step": "log_analyzer" }`'
+    '\nLogs show high CPU usage → `{ "thought": "High CPU usage suggests a system-wide issue. Checking incidents.", "next_step": "incident_monitor" }`'
+    '\nIncident detected → `{ "thought": "An incident has been identified. A fix should be suggested.", "next_step": "fix_suggester" }`'
+    '\nFix suggested → `{ "thought": "A fix is available. Executing it now.", "next_step": "action_executor" }`'
+    '\nFix executed successfully → `{ "thought": "The issue has been fully resolved.", "next_step": "FINISH" }`'
 )
-
 
 def supervisor_node(state: MessagesState) -> Command[Literal[*members, "__end__"]]:
     user_message = state["messages"][-1].content  # Fix: Access content directly
@@ -162,16 +165,32 @@ user_prompt = st.text_area(
     "📝 Describe your issue:", "Nginx service is failing intermittently."
 )
 
+def display_message(label, message, class_name):
+    """Utility function to display formatted messages."""
+    if message is not None:
+        st.markdown(
+            f"<div class='{class_name}'><b>{label}:</b><br>{message}</div>",
+            unsafe_allow_html=True,
+        )
+
 if st.button("Run AI Supervisor"):
     with st.spinner("🤖 AI Agents Collaborating..."):
         try:
             for step in graph.stream({"messages": [HumanMessage(content=user_prompt)]}):
                 for agent, result in step.items():
-                    if agent == "supervisor":
+                    if agent == "supervisor" and result is not None:
+                        response_data = json.loads(result)
                         display_message(
-                            "Supervisor Decision", result, "supervisor-output"
+                            "Supervisor Thought",
+                            response_data.get("thought", "No thought provided"),
+                            "agent-thought",
                         )
-                    else:
+                        display_message(
+                            "Supervisor Decision",
+                            response_data.get("next_step", "No decision made"),
+                            "supervisor-output",
+                        )
+                    elif agent != "supervisor":
                         display_message(
                             f"{agent.capitalize()} Output", result, "agent-observation"
                         )
