@@ -8,12 +8,10 @@ Each module is built with **Streamlit for UI**, **Langchain for AI workflows**, 
 
 ## 🏗️ Features
 
-- **Multi-Agent Incident Management**: AI agents coordinate log analysis, incident detection, and resolution.
-- **RAG-based Intelligent Search**: AI retrieves, ranks, and presents information from documents.
 - **Spotify Recommendation Engine**: AI-based music recommendations using collaborative filtering.
 - **Log Analysis & Anomaly Detection**: ML-based system for detecting unusual patterns in system logs.
-- **Graph-Based Event Transitions**: Visualizations of event relationships in log data.
-- **Predictive AI for System Events**: Uses ML models to forecast future log-based incidents.
+- **RAG-based Intelligent Search**: AI retrieves, ranks, and presents information from documents.
+- **Multi-Agent Incident Management**: AI agents coordinate log analysis, incident detection, and resolution.
 
 ---
 
@@ -49,16 +47,10 @@ pip install -r requirements.txt
 
 ### **3️⃣ Run Each Application**
 
-#### **Multi-Agent AI Supervisor**
+#### **Spotify Recommendation System**
 
 ```sh
-streamlit run multi-agents.py
-```
-
-#### **RAG-Based Search**
-
-```sh
-streamlit run llm_rag.py
+streamlit run spotify.py
 ```
 
 #### **Log Analysis & Anomaly Detection**
@@ -67,10 +59,16 @@ streamlit run llm_rag.py
 streamlit run logs.py
 ```
 
-#### **Spotify Recommendation System**
+#### **RAG-Based Search**
 
 ```sh
-streamlit run spotify.py
+streamlit run llm_rag.py
+```
+
+#### **Multi-Agent AI Supervisor**
+
+```sh
+streamlit run multi-agents.py
 ```
 
 ---
@@ -90,15 +88,15 @@ A real-time **incident management system** where AI agents analyze logs, detect 
 
 ---
 
-### **🔹 RAG-Based Intelligent Search (llm_rag.py)**
+### **🔹 Spotify Recommendation Engine (spotify.py)**
 
-An **AI-powered retrieval system** that enhances LLM responses with external document search. Uses **FAISS for vector storage** and **Langchain document loaders.**
+A **collaborative filtering** AI system that recommends artists based on user preferences and listening history.
 
-🔹 **Key Features:**
+🔹 **Methods Used:**
 
-- Upload and process Markdown files for search.
-- Uses embeddings to rank document relevance.
-- Visualizes attention matrices and search queries.
+- **User-based Filtering:** Finds similar users for recommendations.
+- **Item-based Filtering:** Identifies music trends from similar artists.
+- **Clustering & Co-occurrence Analysis:** Detects playlist-based patterns.
 
 ---
 
@@ -114,15 +112,15 @@ Processes logs, extracts patterns, and visualizes system anomalies using ML.
 
 ---
 
-### **🔹 Spotify Recommendation Engine (spotify.py)**
+### **🔹 RAG-Based Intelligent Search (llm_rag.py)**
 
-A **collaborative filtering** AI system that recommends artists based on user preferences and listening history.
+An **AI-powered retrieval system** that enhances LLM responses with external document search. Uses **FAISS for vector storage** and **Langchain document loaders.**
 
-🔹 **Methods Used:**
+🔹 **Key Features:**
 
-- **User-based Filtering:** Finds similar users for recommendations.
-- **Item-based Filtering:** Identifies music trends from similar artists.
-- **Clustering & Co-occurrence Analysis:** Detects playlist-based patterns.
+- Upload and process Markdown files for search.
+- Uses embeddings to rank document relevance.
+- Visualizes attention matrices and search queries.
 
 ## 📝 License
 
