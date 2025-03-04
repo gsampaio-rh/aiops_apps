@@ -42,7 +42,6 @@ st.markdown(
         .WARNING { background-color: #fff3e0; color: #e65100; }
         .ERROR { background-color: #ffebee; color: #b71c1c; }
         .CRITICAL { background-color: #fbe9e7; color: #d84315; }
-        .SECURITY { background-color: #ede7f6; color: #4527a0; }
     </style>
     """,
     unsafe_allow_html=True,
@@ -76,18 +75,21 @@ def parse_log(log_entry):
 
 
 def classify_logs(df_logs):
-    """Classifies logs using Ollama API, updating the dataframe dynamically."""
+    """Classifies logs using Ollama API, updating the dataframe dynamically with color coding."""
     endpoint = "http://localhost:11434/api/generate"
     progress_bar = st.progress(0)
     log_table = st.empty()
+    log_display = st.empty()
 
     df_logs["classification"] = "Processing..."
-    log_table.dataframe(df_logs, use_container_width=True)
+    log_table.dataframe(
+        df_logs.style.apply(highlight_rows, axis=1), use_container_width=True
+    )
 
     for i in range(len(df_logs)):
         payload = {
             "model": "mistral",
-            "system": "You are an AI assistant classifying log messages. Assign one of the following categories: INFO, WARNING, ERROR, CRITICAL, SECURITY. Return only the category.",
+            "system": "You are an AI assistant classifying log messages. Assign one of the following categories: INFO, WARNING, ERROR, CRITICAL. Return only the category.",
             "prompt": df_logs.at[i, "event"],
             "temperature": 0.0,
             "stream": False,
@@ -101,11 +103,30 @@ def classify_logs(df_logs):
         category = res_json.get("response", "Unknown").strip()
         df_logs.at[i, "classification"] = category
 
+        # Display classification in real-time
+        log_display.markdown(
+            f"<div class='log-classification {category}'>{df_logs.at[i, 'event'][:100]}... → <b>{category}</b></div>",
+            unsafe_allow_html=True,
+        )
+
         # Display progress
         progress_bar.progress((i + 1) / len(df_logs))
-        log_table.dataframe(df_logs, use_container_width=True)
+        log_table.dataframe(
+            df_logs.style.apply(highlight_rows, axis=1), use_container_width=True
+        )
         time.sleep(0.1)
     return df_logs
+
+
+def highlight_rows(row):
+    """Applies background color to rows based on classification."""
+    color_map = {
+        "INFO": "background-color: #e3f2fd; color: #1565c0;",
+        "WARNING": "background-color: #fff3e0; color: #e65100;",
+        "ERROR": "background-color: #ffebee; color: #b71c1c;",
+        "CRITICAL": "background-color: #fbe9e7; color: #d84315;",
+    }
+    return [color_map.get(row.classification, "") for _ in row]
 
 
 def detect_anomalies(log_texts):
@@ -160,7 +181,9 @@ if uploaded_file:
         df_logs["anomaly"] = detect_anomalies(df_logs["event"].tolist())
 
         # Display final structured logs
-        st.dataframe(df_logs, use_container_width=True)
+        st.dataframe(
+            df_logs.style.apply(highlight_rows, axis=1), use_container_width=True
+        )
 
 else:
     st.info("Please upload a log file to analyze.")
