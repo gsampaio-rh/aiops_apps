@@ -89,7 +89,7 @@ def classify_logs(df_logs):
     for i in range(len(df_logs)):
         payload = {
             "model": "mistral",
-            "system": "You are an AI assistant classifying log messages. Assign one of the following categories: INFO, WARNING, ERROR, CRITICAL. Return only the category.",
+            "system": "You are an AI assistant specialized in log classification. Given a log entry, you must categorize it into one of the following categories: INFO, WARNING, ERROR, CRITICAL. If uncertain, use the closest matching category. Return only the category.",
             "prompt": df_logs.at[i, "event"],
             "temperature": 0.0,
             "stream": False,
@@ -168,13 +168,10 @@ if uploaded_file:
         unsafe_allow_html=True,
     )
 
-    # Display sample logs
-    with st.expander("📄 View Sample Logs"):
-        st.dataframe(df_logs.head(), use_container_width=True)
-
+    st.subheader("🔹 AI Log Classification")
     # Button to start classification
     if st.button("💡 Start Classification"):
-        st.subheader("🔹 AI Log Classification")
+
         df_logs = classify_logs(df_logs)
 
         # Anomaly Detection
