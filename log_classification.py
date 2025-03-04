@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
 from sklearn.ensemble import IsolationForest
+import time
 
 # ================================
 # 🌟 APP CONFIGURATION
@@ -78,7 +79,10 @@ def classify_logs(logs):
     """Classifies logs using Ollama API."""
     endpoint = "http://localhost:11434/api/generate"
     classifications = []
-    for log in logs:
+    progress_bar = st.progress(0)
+    log_display = st.empty()
+
+    for i, log in enumerate(logs):
         payload = {
             "model": "mistral",
             "system": "You are an AI assistant classifying log messages. Assign one of the following categories: INFO, WARNING, ERROR, CRITICAL, SECURITY. Return only the category.",
@@ -94,6 +98,14 @@ def classify_logs(logs):
         res_json = response.json()
         category = res_json.get("response", "Unknown").strip()
         classifications.append((log, category))
+
+        # Display progress
+        progress_bar.progress((i + 1) / len(logs))
+        log_display.markdown(
+            f"<div class='log-classification {category}'>{log[:100]}... → <b>{category}</b></div>",
+            unsafe_allow_html=True,
+        )
+        time.sleep(0.1)
     return classifications
 
 
@@ -136,44 +148,20 @@ if uploaded_file:
         unsafe_allow_html=True,
     )
 
-    st.subheader("🔹 Extracted Logs ")
     # Display sample logs
     with st.expander("📄 View Sample Logs"):
         st.dataframe(df_logs.head(), use_container_width=True)
 
-    # AI Classification
-    st.subheader("🔹 AI Log Classification")
-    classified_logs = classify_logs(df_logs["event"].tolist())
+    # Button to start classification
+    if st.button("💡 Start Classification"):
+        st.subheader("🔹 AI Log Classification")
+        classified_logs = classify_logs(df_logs["event"].tolist())
 
-    for log, category in classified_logs:
-        st.markdown(
-            f"<div class='log-classification {category}'>{log[:100]}... → <b>{category}</b></div>",
-            unsafe_allow_html=True,
-        )
+        # Anomaly Detection
+        df_logs["anomaly"] = detect_anomalies(df_logs["event"].tolist())
 
-    # Anomaly Detection
-    df_logs["anomaly"] = detect_anomalies(df_logs["event"].tolist())
+        # Display structured logs
+        st.dataframe(df_logs, use_container_width=True)
 
-    # Display structured logs
-    st.dataframe(df_logs, use_container_width=True)
-
-    # ================================
-    # 📊 DATA VISUALIZATION
-    # ================================
-    st.subheader("📊 Log Classification Distribution")
-    class_counts = df_logs["classification"].value_counts()
-    fig, ax = plt.subplots(figsize=(6, 3))
-    sns.barplot(x=class_counts.index, y=class_counts.values, palette="coolwarm", ax=ax)
-    ax.set_xlabel("Classification")
-    ax.set_ylabel("Count")
-    st.pyplot(fig)
-
-    st.subheader("🚨 Anomaly Detection")
-    anomaly_counts = df_logs["anomaly"].value_counts()
-    fig, ax = plt.subplots(figsize=(6, 3))
-    sns.barplot(x=anomaly_counts.index, y=anomaly_counts.values, palette="Reds", ax=ax)
-    ax.set_xlabel("Anomaly Status")
-    ax.set_ylabel("Count")
-    st.pyplot(fig)
 else:
     st.info("Please upload a log file to analyze.")
