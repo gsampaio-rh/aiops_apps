@@ -75,18 +75,20 @@ def parse_log(log_entry):
         }
 
 
-def classify_logs(logs):
-    """Classifies logs using Ollama API."""
+def classify_logs(df_logs):
+    """Classifies logs using Ollama API, updating the dataframe dynamically."""
     endpoint = "http://localhost:11434/api/generate"
-    classifications = []
     progress_bar = st.progress(0)
-    log_display = st.empty()
+    log_table = st.empty()
 
-    for i, log in enumerate(logs):
+    df_logs["classification"] = "Processing..."
+    log_table.dataframe(df_logs, use_container_width=True)
+
+    for i in range(len(df_logs)):
         payload = {
             "model": "mistral",
             "system": "You are an AI assistant classifying log messages. Assign one of the following categories: INFO, WARNING, ERROR, CRITICAL, SECURITY. Return only the category.",
-            "prompt": log,
+            "prompt": df_logs.at[i, "event"],
             "temperature": 0.0,
             "stream": False,
         }
@@ -97,16 +99,13 @@ def classify_logs(logs):
         )
         res_json = response.json()
         category = res_json.get("response", "Unknown").strip()
-        classifications.append((log, category))
+        df_logs.at[i, "classification"] = category
 
         # Display progress
-        progress_bar.progress((i + 1) / len(logs))
-        log_display.markdown(
-            f"<div class='log-classification {category}'>{log[:100]}... → <b>{category}</b></div>",
-            unsafe_allow_html=True,
-        )
+        progress_bar.progress((i + 1) / len(df_logs))
+        log_table.dataframe(df_logs, use_container_width=True)
         time.sleep(0.1)
-    return classifications
+    return df_logs
 
 
 def detect_anomalies(log_texts):
@@ -155,12 +154,12 @@ if uploaded_file:
     # Button to start classification
     if st.button("💡 Start Classification"):
         st.subheader("🔹 AI Log Classification")
-        classified_logs = classify_logs(df_logs["event"].tolist())
+        df_logs = classify_logs(df_logs)
 
         # Anomaly Detection
         df_logs["anomaly"] = detect_anomalies(df_logs["event"].tolist())
 
-        # Display structured logs
+        # Display final structured logs
         st.dataframe(df_logs, use_container_width=True)
 
 else:
