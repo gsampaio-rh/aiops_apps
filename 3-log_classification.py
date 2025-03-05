@@ -8,6 +8,11 @@ import numpy as np
 import seaborn as sns
 from sklearn.ensemble import IsolationForest
 import time
+import networkx as nx
+
+# Initialize Knowledge Graph
+graph = nx.DiGraph()
+
 
 # ================================
 # 🌟 APP CONFIGURATION
@@ -100,7 +105,6 @@ def classify_logs(df_logs):
             data=json.dumps(payload),
         )
         res_json = response.json()
-        print(res_json)
         try:
             classification = json.loads(res_json.get("response", "{}"))
             severity = classification.get("severity", "Unknown")  # Store severity in a variable
@@ -150,6 +154,38 @@ def detect_anomalies(log_texts):
     return ["Anomaly" if pred == -1 else "Normal" for pred in predictions]
 
 
+def build_knowledge_graph(df_logs):
+    """Builds a knowledge graph connecting logs to services and impacts."""
+    for _, row in df_logs.iterrows():
+        graph.add_node(
+            row["event"],
+            service=row["service"],
+            severity=row["classification"],
+            impact=row["impact"],
+            region=row["region"],
+        )
+        if row["service"] != "Unknown":
+            graph.add_edge(row["service"], row["event"], relation="affects")
+    return graph
+
+
+def plot_knowledge_graph(graph):
+    """Visualizes the knowledge graph using Matplotlib and NetworkX."""
+    plt.figure(figsize=(12, 8))
+    pos = nx.spring_layout(graph)
+    nx.draw(
+        graph,
+        pos,
+        with_labels=True,
+        node_color="lightblue",
+        edge_color="gray",
+        node_size=3000,
+        font_size=10,
+        font_weight="bold",
+    )
+    st.pyplot(plt)
+
+
 # ================================
 # 💂 LOG FILE UPLOAD & PROCESSING
 # ================================
@@ -185,13 +221,19 @@ if uploaded_file:
 
         df_logs = classify_logs(df_logs)
 
-        # Anomaly Detection
-        df_logs["anomaly"] = detect_anomalies(df_logs["event"].tolist())
+        build_knowledge_graph(df_logs)
 
-        # Display final structured logs
-        st.dataframe(
-            df_logs.style.apply(highlight_rows, axis=1), use_container_width=True
-        )
+        st.subheader("🔹 Knowledge Graph Visualization")
+        st.write("Below is the visual representation of the knowledge graph:")
+        plot_knowledge_graph(graph)
+
+        # Anomaly Detection
+        # df_logs["anomaly"] = detect_anomalies(df_logs["event"].tolist())
+
+        # # Display final structured logs
+        # st.dataframe(
+        #     df_logs.style.apply(highlight_rows, axis=1), use_container_width=True
+        # )
 
 else:
     st.info("Please upload a log file to analyze.")

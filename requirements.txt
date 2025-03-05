@@ -13,3 +13,4 @@ langchain-ollama
 faiss-cpu
 tiktoken
 langgraph
+pyvis
