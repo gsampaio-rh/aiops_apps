@@ -89,7 +89,7 @@ def classify_logs(df_logs):
     for i in range(len(df_logs)):
         payload = {
             "model": "mistral",
-            "system": "You are an AI assistant specialized in log classification. Given a log entry, you must categorize it into one of the following categories: INFO, WARNING, ERROR, CRITICAL. If uncertain, use the closest matching category. Return only the category.",
+            "system": 'You are an AI specialized in log classification. Ensure all responses strictly follow this JSON format: {"severity": "INFO/WARNING/ERROR/CRITICAL", "service": "<detected service>", "impact": "<impact assessment>", "region": "<identified region>"}. Classify logs accurately and add contextual metadata. Do not include explanations, only return a valid JSON response.',
             "prompt": df_logs.at[i, "event"],
             "temperature": 0.0,
             "stream": False,
@@ -100,12 +100,23 @@ def classify_logs(df_logs):
             data=json.dumps(payload),
         )
         res_json = response.json()
-        category = res_json.get("response", "Unknown").strip()
-        df_logs.at[i, "classification"] = category
+        print(res_json)
+        try:
+            classification = json.loads(res_json.get("response", "{}"))
+            severity = classification.get("severity", "Unknown")  # Store severity in a variable
+            df_logs.at[i, "classification"] = severity
+            df_logs.at[i, "service"] = classification.get("service", "Unknown")
+            df_logs.at[i, "impact"] = classification.get("impact", "Unknown")
+            df_logs.at[i, "region"] = classification.get("region", "Unknown")
+        except json.JSONDecodeError:
+            df_logs.at[i, "classification"] = "Unknown"
+            df_logs.at[i, "service"] = "Unknown"
+            df_logs.at[i, "impact"] = "Unknown"
+            df_logs.at[i, "region"] = "Unknown"
 
         # Display classification in real-time
         log_display.markdown(
-            f"<div class='log-classification {category}'>{df_logs.at[i, 'event'][:100]}... → <b>{category}</b></div>",
+            f"<div class='log-classification {severity}'>{df_logs.at[i, 'event'][:100]}... → <b>{severity}</b></div>",
             unsafe_allow_html=True,
         )
 
