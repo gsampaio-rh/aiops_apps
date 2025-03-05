@@ -9,6 +9,9 @@ import seaborn as sns
 from sklearn.ensemble import IsolationForest
 import time
 import networkx as nx
+from pyvis.network import Network
+import tempfile
+import os
 
 # Initialize Knowledge Graph
 graph = nx.DiGraph()
@@ -105,6 +108,7 @@ def classify_logs(df_logs):
             data=json.dumps(payload),
         )
         res_json = response.json()
+        print(res_json)
         try:
             classification = json.loads(res_json.get("response", "{}"))
             severity = classification.get("severity", "Unknown")  # Store severity in a variable
@@ -170,20 +174,30 @@ def build_knowledge_graph(df_logs):
 
 
 def plot_knowledge_graph(graph):
-    """Visualizes the knowledge graph using Matplotlib and NetworkX."""
-    plt.figure(figsize=(12, 8))
-    pos = nx.spring_layout(graph)
-    nx.draw(
-        graph,
-        pos,
-        with_labels=True,
-        node_color="lightblue",
-        edge_color="gray",
-        node_size=3000,
-        font_size=10,
-        font_weight="bold",
-    )
-    st.pyplot(plt)
+    """Generates an interactive knowledge graph using Pyvis."""
+    net = Network(height="700px", width="100%", notebook=False, directed=True)
+    net.from_nx(graph)
+
+    for node in net.nodes:
+        node["size"] = 20  # Standardize node sizes
+        if "severity" in graph.nodes[node["id"]]:
+            severity = graph.nodes[node["id"]]["severity"]
+            if severity == "CRITICAL":
+                node["color"] = "#ff4c4c"
+            elif severity == "ERROR":
+                node["color"] = "#ff8c42"
+            elif severity == "WARNING":
+                node["color"] = "#ffd700"
+            else:
+                node["color"] = "#4CAF50"
+        node["title"] = (
+            f"Service: {graph.nodes[node['id']].get('service', 'Unknown')}\nImpact: {graph.nodes[node['id']].get('impact', 'Unknown')}\nRegion: {graph.nodes[node['id']].get('region', 'Unknown')}"
+        )
+
+    temp_dir = tempfile.mkdtemp()
+    graph_html_path = os.path.join(temp_dir, "graph.html")
+    net.save_graph(graph_html_path)
+    return graph_html_path
 
 
 # ================================
@@ -225,7 +239,13 @@ if uploaded_file:
 
         st.subheader("🔹 Knowledge Graph Visualization")
         st.write("Below is the visual representation of the knowledge graph:")
-        plot_knowledge_graph(graph)
+
+        graph_html_path = plot_knowledge_graph(graph)
+        st.components.v1.html(
+            open(graph_html_path, "r", encoding="utf-8").read(),
+            height=700,
+            scrolling=True,
+        )
 
         # Anomaly Detection
         # df_logs["anomaly"] = detect_anomalies(df_logs["event"].tolist())
