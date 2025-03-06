@@ -192,6 +192,115 @@ if uploaded_file:
 
     # 📌 Heatmap of Similarity
     st.subheader("🌐 Matchmaking Network")
+    with st.expander(
+        "🤝 View User-Artist Interaction Grid - Collaborative Filtering Recommendation"
+    ):
+        if selected_user not in similarity_df.index:
+            st.warning("⚠️ Selected user not found in similarity matrix.")
+        else:
+            # 🎛️ User Control for Top N Users & Artists
+            col1, col2 = st.columns(2)
+            top_n_users = col1.slider("🔢 Number of Similar Users", 3, 20, 10)
+            top_n_artists = col2.slider("🎼 Number of Artists", 3, 50, 10)
+
+            # Use the helper function to compute similar users and recommended artists
+            similar_users, recommended_artists = get_similar_users_and_recommendations(
+                selected_user,
+                user_artist_matrix,
+                similarity_df,
+                top_n_users=top_n_users,
+            )
+            # Filter the user-artist matrix to include the selected user and their top similar users
+            filtered_matrix = user_artist_matrix.loc[
+                [selected_user] + list(similar_users)
+            ]
+
+            # Determine the set of artists the selected user has interacted with
+            selected_user_artists = set(
+                user_artist_matrix.loc[selected_user][
+                    user_artist_matrix.loc[selected_user] > 0
+                ].index
+            )
+
+            # Order columns: first, the selected user's liked artists; then, recommended artists.
+            selected_artists_in_matrix = [
+                artist
+                for artist in filtered_matrix.columns
+                if artist in selected_user_artists
+            ]
+            recommended_artists_in_matrix = [
+                artist
+                for artist in filtered_matrix.columns
+                if artist in recommended_artists
+            ]
+            # Combine them, ensuring no duplicates and limiting to top_n_artists
+            ordered_artists = selected_artists_in_matrix + [
+                artist
+                for artist in recommended_artists_in_matrix
+                if artist not in selected_artists_in_matrix
+            ]
+            ordered_artists = ordered_artists[:top_n_artists]
+            filtered_matrix = filtered_matrix[ordered_artists]
+
+            # 🎭 Truncate long usernames & artist names for readability
+            max_label_length = 10  # Limit to 10 characters
+            truncated_users = {
+                user: (
+                    user[:max_label_length] + "..."
+                    if len(user) > max_label_length
+                    else user
+                )
+                for user in filtered_matrix.index
+            }
+            truncated_artists = {
+                artist: (
+                    artist[:max_label_length] + "..."
+                    if len(artist) > max_label_length
+                    else artist
+                )
+                for artist in filtered_matrix.columns
+            }
+            filtered_matrix.index = [
+                truncated_users[user] for user in filtered_matrix.index
+            ]
+            filtered_matrix.columns = [
+                truncated_artists[artist] for artist in filtered_matrix.columns
+            ]
+
+            # 🎭 Generate the visual grid matrix
+            fig, ax = plt.subplots(figsize=(9, 5))
+            matrix_data = filtered_matrix.to_numpy()
+
+            # Replace numerical values with icons: "✔️" for interaction, "❌" for none
+            # We'll add a 💡 for new recommended artists
+            icon_matrix = np.full(matrix_data.shape, "❌", dtype=object)
+
+            # Mark interactions (✔️)
+            icon_matrix[matrix_data > 0] = "✔️"
+
+            # Mark new recommended artists with 💡 only for the relevant cells
+            for row_idx, user in enumerate(filtered_matrix.index):
+                for col_idx, artist in enumerate(filtered_matrix.columns):
+                    # Check if this artist is recommended but not yet interacted with
+                    if (
+                        artist in recommended_artists_in_matrix
+                        and artist not in selected_user_artists
+                    ):
+                        if (
+                            matrix_data[row_idx, col_idx] == 0
+                        ):  # No interaction by this user
+                            icon_matrix[row_idx, col_idx] = "💡"
+
+            # Convert icon_matrix to DataFrame
+            grid_df = pd.DataFrame(
+                icon_matrix,
+                index=filtered_matrix.index,
+                columns=filtered_matrix.columns,
+            )
+
+            # Display the grid with styled icons
+            st.dataframe(grid_df.style.set_properties(**{"text-align": "center"}))
+            
     with st.expander("🔥 View User Similarity Heatmap"):
         # Select top 10 most similar users
         similar_users = (
@@ -202,7 +311,11 @@ if uploaded_file:
         # 📌 Improve Label Readability
         max_label_length = 8  # Adjust for better readability
         truncated_labels = {
-            user: user[:max_label_length] + "..." if len(user) > max_label_length else user
+            user: (
+                user[:max_label_length] + "..."
+                if len(user) > max_label_length
+                else user
+            )
             for user in similar_users
         }
         heatmap_data.index = [truncated_labels[user] for user in heatmap_data.index]
@@ -226,78 +339,6 @@ if uploaded_file:
 
         # 🖼️ Display the heatmap
         st.pyplot(fig)
-
-    with st.expander("🤝 View User-Artist Interaction Grid - Collaborative Filtering Recommendation"):
-        if selected_user not in similarity_df.index:
-            st.warning("⚠️ Selected user not found in similarity matrix.")
-        else:
-            # 🎛️ User Control for Top N Users & Artists
-            col1, col2 = st.columns(2)
-            top_n_users = col1.slider("🔢 Number of Similar Users", 3, 20, 10)
-            top_n_artists = col2.slider("🎼 Number of Artists", 3, 50, 10)
-
-            # Use the helper function to compute similar users and recommended artists
-            similar_users, recommended_artists = get_similar_users_and_recommendations(
-                selected_user, user_artist_matrix, similarity_df, top_n_users=top_n_users
-            )
-            # Filter the user-artist matrix to include the selected user and their top similar users
-            filtered_matrix = user_artist_matrix.loc[[selected_user] + list(similar_users)]
-
-            # Determine the set of artists the selected user has interacted with
-            selected_user_artists = set(
-                user_artist_matrix.loc[selected_user][user_artist_matrix.loc[selected_user] > 0].index
-            )
-
-            # Order columns: first, the selected user's liked artists; then, recommended artists.
-            selected_artists_in_matrix = [artist for artist in filtered_matrix.columns if artist in selected_user_artists]
-            recommended_artists_in_matrix = [artist for artist in filtered_matrix.columns if artist in recommended_artists]
-            # Combine them, ensuring no duplicates and limiting to top_n_artists
-            ordered_artists = selected_artists_in_matrix + [
-                artist for artist in recommended_artists_in_matrix if artist not in selected_artists_in_matrix
-            ]
-            ordered_artists = ordered_artists[:top_n_artists]
-            filtered_matrix = filtered_matrix[ordered_artists]
-
-            # 🎭 Truncate long usernames & artist names for readability
-            max_label_length = 10  # Limit to 10 characters
-            truncated_users = {
-                user: (user[:max_label_length] + "..." if len(user) > max_label_length else user)
-                for user in filtered_matrix.index
-            }
-            truncated_artists = {
-                artist: (artist[:max_label_length] + "..." if len(artist) > max_label_length else artist)
-                for artist in filtered_matrix.columns
-            }
-            filtered_matrix.index = [truncated_users[user] for user in filtered_matrix.index]
-            filtered_matrix.columns = [truncated_artists[artist] for artist in filtered_matrix.columns]
-
-            # 🎭 Generate the visual grid matrix
-            fig, ax = plt.subplots(figsize=(9, 5))
-            matrix_data = filtered_matrix.to_numpy()
-
-            # Replace numerical values with icons: "✔️" for interaction, "❌" for none
-            # We'll add a 💡 for new recommended artists
-            icon_matrix = np.full(matrix_data.shape, "❌", dtype=object)
-
-            # Mark interactions (✔️)
-            icon_matrix[matrix_data > 0] = "✔️"
-
-            # Mark new recommended artists with 💡 only for the relevant cells
-            for row_idx, user in enumerate(filtered_matrix.index):
-                for col_idx, artist in enumerate(filtered_matrix.columns):
-                    # Check if this artist is recommended but not yet interacted with
-                    if (
-                        artist in recommended_artists_in_matrix
-                        and artist not in selected_user_artists
-                    ):
-                        if matrix_data[row_idx, col_idx] == 0:  # No interaction by this user
-                            icon_matrix[row_idx, col_idx] = "💡"
-
-            # Convert icon_matrix to DataFrame
-            grid_df = pd.DataFrame(icon_matrix, index=filtered_matrix.index, columns=filtered_matrix.columns)
-
-            # Display the grid with styled icons
-            st.dataframe(grid_df.style.set_properties(**{"text-align": "center"}))
 
     with st.expander("🔍 View Artist Recommendations"):
         if selected_user not in similarity_df.index:
