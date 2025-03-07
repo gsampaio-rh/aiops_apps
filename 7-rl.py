@@ -57,35 +57,36 @@ actions = [
 
 # ---- AI CODE GENERATION ----
 def generate_solutions():
-    """Streams AI solutions for finding the second largest number inside expanders."""
+    """Streams AI solutions for selected strategies."""
     solutions = {}
 
-    for action in actions:
+    for action in selected_actions:  # Use only user-selected strategies
         with st.expander(f"✨ Strategy: {action}"):
-            # Create a placeholder inside the expander
-            placeholder = st.empty()
-            placeholder.markdown(f"⌛ Generating solution for **{action}**...")
+            with st.spinner(f"🔄 Generating solution for **{action}**..."):
+                placeholder = st.empty()
 
-            prompt = f"""
-            Write a Python function named `second_largest` that finds the second largest distinct element in an array.
-            Use this approach: {action}. Ensure the function handles edge cases properly.
-            Only return the function implementation, no explanations or test cases.
-            """
+                prompt = f"""
+                Write a Python function named `second_largest` that finds the second largest distinct element in an array.
+                Use this approach: {action}. Ensure the function handles edge cases properly.
+                Only return the function implementation, no explanations or test cases.
+                """
 
-            # Stream response
-            response = ""
-            for chunk in llm.stream(prompt):  # Streaming the response
-                response += chunk
-                placeholder.markdown(
-                    f"```python\n{response}\n```"
-                )  # Update UI in real-time
+                # Stream response
+                response = ""
+                for chunk in llm.stream(prompt):  # Streaming the response
+                    response += chunk
+                    placeholder.markdown(
+                        f"```python\n{response}\n```"
+                    )  # Update UI in real-time
 
-            # Extract and finalize the function code
-            match = re.search(r"```python\n(.*?)```", response, re.DOTALL)
-            solutions[action] = match.group(1).strip() if match else response.strip()
+                # Extract and finalize the function code
+                match = re.search(r"```python\n(.*?)```", response, re.DOTALL)
+                solutions[action] = (
+                    match.group(1).strip() if match else response.strip()
+                )
 
-            # Replace placeholder with final code block
-            placeholder.code(solutions[action], language="python")
+                # Replace placeholder with final code block
+                placeholder.code(solutions[action], language="python")
 
     return solutions
 
@@ -123,19 +124,62 @@ def evaluate_solution(solution_code, array, expected_output):
         return reward
     except Exception:
         return -10
-# ---- MAIN INTERFACE ----
+
+
+# ---- SIDEBAR PROBLEM DESCRIPTION ----
+st.sidebar.header("📖 Problem Description")
+
+st.sidebar.markdown(
+    """
+    ### **Finding the Second Largest Element**
+    Given a list of integers, our goal is to **find the second largest distinct number**.  
+    - If there's no second distinct number, return `-1`.
+    - Handle edge cases such as duplicate numbers and small lists.
+    - AI will generate and evaluate multiple strategies.
+    """
+)
+
+# ---- SIDEBAR USER CONTROLS ----
 st.sidebar.header("⚙️ Select Training Parameters")
 
-if st.button("📜 Generate AI Solutions", key="generate"):
+
+# User chooses how many strategies to generate
+num_strategies = st.sidebar.slider(
+    "🛠️ Number of Strategies", 1, len(actions), len(actions)
+)
+
+# User chooses how many test cases to evaluate
+num_scenarios = st.sidebar.slider(
+    "🔢 Number of Test Scenarios", 1, len(TEST_CASES), len(TEST_CASES)
+)
+
+# Dynamically filter based on user input
+selected_actions = actions[:num_strategies]
+selected_test_cases = TEST_CASES[:num_scenarios]
+
+# ---- MAIN INTERFACE ----
+
+# ---- DISPLAY SELECTED TEST CASES ----
+st.markdown("### 🧪 Test Scenarios")
+with st.expander("📌 Selected Test Cases", expanded=True):
+    for i, (array, expected_output) in enumerate(selected_test_cases):
+        st.markdown(f"**Test {i+1}:** `{array}` → Expected Output: `{expected_output}`")
+
+
+if st.button("📜 Generate Code Functions using AI", key="generate"):
     st.markdown("### 📝 AI-Generated Solutions")
     solutions = generate_solutions()
 
 if st.button("🚀 Run Evaluations", key="evaluate"):
     solutions = generate_solutions()
     st.markdown("### 🔄 AI Learning Process")
-    rewards = {action: [] for action in actions}
+    rewards = {
+        action: [] for action in selected_actions
+    }  # Use only selected strategies
 
-    for i, (array, expected_output) in enumerate(TEST_CASES):
+    for i, (array, expected_output) in enumerate(
+        selected_test_cases
+    ):  # Use only selected test cases
         with st.expander(f"🧪 Test Case {i+1}: `{array}`"):
             st.markdown(f"✅ Expected Output: `{expected_output}`")
 
@@ -157,7 +201,7 @@ if st.button("🚀 Run Evaluations", key="evaluate"):
     fig, ax = plt.subplots()
     for action, reward_values in rewards.items():
         ax.plot(
-            range(1, len(TEST_CASES) + 1),
+            range(1, len(selected_test_cases) + 1),
             reward_values,
             marker="o",
             linestyle="-",
