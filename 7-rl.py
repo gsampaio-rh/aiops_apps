@@ -57,17 +57,36 @@ actions = [
 
 # ---- AI CODE GENERATION ----
 def generate_solutions():
-    """Generates different AI solutions for finding the second largest number."""
+    """Streams AI solutions for finding the second largest number inside expanders."""
     solutions = {}
+
     for action in actions:
-        prompt = f"""
-        Write a Python function named `second_largest` that finds the second largest distinct element in an array.
-        Use this approach: {action}. Ensure the function handles edge cases properly.
-        Only return the function implementation, no explanations or test cases.
-        """
-        response = llm.invoke(prompt)
-        match = re.search(r"```python\n(.*?)```", response, re.DOTALL)
-        solutions[action] = match.group(1).strip() if match else response.strip()
+        with st.expander(f"✨ Strategy: {action}"):
+            # Create a placeholder inside the expander
+            placeholder = st.empty()
+            placeholder.markdown(f"⌛ Generating solution for **{action}**...")
+
+            prompt = f"""
+            Write a Python function named `second_largest` that finds the second largest distinct element in an array.
+            Use this approach: {action}. Ensure the function handles edge cases properly.
+            Only return the function implementation, no explanations or test cases.
+            """
+
+            # Stream response
+            response = ""
+            for chunk in llm.stream(prompt):  # Streaming the response
+                response += chunk
+                placeholder.markdown(
+                    f"```python\n{response}\n```"
+                )  # Update UI in real-time
+
+            # Extract and finalize the function code
+            match = re.search(r"```python\n(.*?)```", response, re.DOTALL)
+            solutions[action] = match.group(1).strip() if match else response.strip()
+
+            # Replace placeholder with final code block
+            placeholder.code(solutions[action], language="python")
+
     return solutions
 
 
@@ -110,10 +129,6 @@ st.sidebar.header("⚙️ Select Training Parameters")
 if st.button("📜 Generate AI Solutions", key="generate"):
     st.markdown("### 📝 AI-Generated Solutions")
     solutions = generate_solutions()
-
-    for action, solution_code in solutions.items():
-        with st.expander(f"✨ Strategy: {action}"):
-            st.code(solution_code, language="python")
 
 if st.button("🚀 Run Evaluations", key="evaluate"):
     solutions = generate_solutions()
