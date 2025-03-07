@@ -2,20 +2,21 @@
 
 ## 📌 Overview
 
-This repository contains multiple AI-driven interactive applications designed for real-time incident management, log analysis, recommendation systems, and intelligent search. The core applications demonstrate multi-agent collaboration, RAG (Retrieval-Augmented Generation), and advanced machine learning for predictive analysis.
+This repository contains multiple AI-driven interactive applications designed for real-time incident management, log analysis, recommendation systems, intelligent search, and reinforcement learning. The core applications demonstrate multi-agent collaboration, RAG (Retrieval-Augmented Generation), and advanced machine learning for predictive analysis.
 
 Each module is built with Streamlit for UI, Langchain for AI workflows, and various ML/AI techniques for automation, visualization, and intelligence.
 
-## 🏗️ Features
+## 🏷️ Features
 
 - **Spotify Recommendation Engine**: AI-based music recommendations using collaborative filtering.
 - **Log Analysis & Classification**: ML-based system for detecting unusual patterns in system logs.
 - **RAG-based Intelligent Search**: AI retrieves, ranks, and presents information from documents.
 - **Multi-Agent Incident Management**: AI agents coordinate log analysis, incident detection, and resolution.
+- **Reinforcement Learning AI Trainer**: AI-driven reinforcement learning system for training and optimizing strategies.
 
 ---
 
-## 📂 Repository Structure
+## 💂️️ Repository Structure
 
 ```text
 📦 Project Root
@@ -25,6 +26,7 @@ Each module is built with Streamlit for UI, Langchain for AI workflows, and vari
 │-- 4-llm_rag.py              # Retrieval-Augmented Generation (RAG) implementation
 │-- 5-agents.py               # Standalone AI agents for task automation
 │-- 6-multi_agents.py         # AI-driven incident management with multi-agents
+│-- 7-rl.py                   # Reinforcement Learning-based AI Trainer
 │-- requirements.txt          # Dependencies for running the project
 │-- README.md                # Project documentation
 │-- data/                     # Data storage directory
@@ -83,6 +85,12 @@ streamlit run 5-agents.py
 
 ```sh
 streamlit run 6-multi_agents.py
+```
+
+#### Reinforcement Learning AI Trainer
+
+```sh
+streamlit run 7-rl.py
 ```
 
 ---
@@ -144,6 +152,20 @@ A real-time incident management system where AI agents analyze logs, detect inci
 - `fix_suggester`: Recommends solutions based on logs.
 - `action_executor`: Applies fixes to resolve issues.
 
+### 🔹 Reinforcement Learning AI Trainer (7-rl.py)
+
+A reinforcement learning-based AI system that optimizes algorithmic strategies for solving computational problems.
+
+🔹 Features:
+
+- Uses Q-learning to train AI models for problem-solving.
+- Evaluates multiple AI-generated solutions in real-time.
+- Implements reinforcement rewards to enhance decision-making.
+- Supports real-time visualization of training progress.
+
+---
+
 ## 📝 License
 
 This project is MIT Licensed—open for contributions and modifications.
+
