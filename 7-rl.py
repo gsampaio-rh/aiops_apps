@@ -165,37 +165,138 @@ with st.expander("📌 Selected Test Cases", expanded=True):
     for i, (array, expected_output) in enumerate(selected_test_cases):
         st.markdown(f"**Test {i+1}:** `{array}` → Expected Output: `{expected_output}`")
 
+# ---- DISPLAY SELECTED STRATEGIES ----
+with st.expander("🛠 Selected AI Strategies", expanded=True):
+    st.markdown("Here are the AI strategies used for solving the problem:")
+    for action in selected_actions:
+        st.markdown(f"- **{action}**")
+
+
+# ---- DISPLAY THE EVALUATION FUNCTION ----
+with st.expander("🔎 View Evaluation Function", expanded=False):
+    st.markdown("### 🧠 How AI Solutions Are Evaluated")
+    st.code(
+        """
+def evaluate_solution(solution_code, array, expected_output):
+    \"\"\"Runs and evaluates the AI-generated solution.\"\"\"
+    if not solution_code:
+        return 0
+
+    try:
+        local_scope = {}
+        exec(solution_code, globals(), local_scope)
+        second_largest = local_scope.get("second_largest")
+
+        if not second_largest:
+            raise ValueError("Function 'second_largest' not found in generated code")
+
+        tracemalloc.start()
+
+        start_time = time.time()
+        result = second_largest(array)
+        execution_time = time.time() - start_time
+
+        current, peak = tracemalloc.get_traced_memory()
+        tracemalloc.stop()
+
+        accuracy = 1.0 if result == expected_output else 0
+        efficiency_score = 1 / (execution_time + 1e-6)
+        space_score = 1 / (peak + 1e-6)
+
+        reward = (accuracy * 10) + (efficiency_score * 100) + (space_score * 50)
+        
+        return {
+            "Accuracy": accuracy,
+            "Execution Time": execution_time,
+            "Memory Used": peak / 1024,  # Convert to KB
+            "Reward": reward
+        }
+    except Exception as e:
+        return {
+            "Accuracy": 0,
+            "Execution Time": "Error",
+            "Memory Used": "Error",
+            "Reward": -10,
+            "Error": str(e),
+        }
+        """,
+        language="python",
+    )
+
+with st.expander(f"🤖 AI Prompt"):
+    st.markdown(
+        """
+                Write a Python function named `second_largest` that finds the second largest distinct element in an array.
+                Use this approach: $_ACTION_. Ensure the function handles edge cases properly.
+                Only return the function implementation, no explanations or test cases.
+        """
+    )
 
 if st.button("📜 Generate Code Functions using AI", key="generate"):
     st.markdown("### 📝 AI-Generated Solutions")
-    solutions = generate_solutions()
+    st.session_state.solutions = generate_solutions()
 
 if st.button("🚀 Run Evaluations", key="evaluate"):
-    solutions = generate_solutions()
-    st.markdown("### 🔄 AI Learning Process")
-    rewards = {
-        action: [] for action in selected_actions
-    }  # Use only selected strategies
+    if not st.session_state.solutions:
+        st.warning("Please generate solutions first!")
+    else:
+        st.markdown("### 🔄 AI Learning Process")
+        rewards = {
+            action: [] for action in selected_actions
+        }  # Use only selected strategies
 
-    for i, (array, expected_output) in enumerate(
-        selected_test_cases
-    ):  # Use only selected test cases
-        with st.expander(f"🧪 Test Case {i+1}: `{array}`"):
-            st.markdown(f"✅ Expected Output: `{expected_output}`")
+        for i, (array, expected_output) in enumerate(
+            selected_test_cases
+        ):  # Use only selected test cases
+            with st.expander(f"🧪 Test Case {i+1}: `{array}`"):
+                st.markdown(f"✅ Expected Output: `{expected_output}`")
 
-            for action, solution_code in solutions.items():
-                reward = evaluate_solution(solution_code, array, expected_output)
-                rewards[action].append(reward)
+                for action, solution_code in st.session_state.solutions.items():
+                    if not solution_code:
+                        st.markdown(f"❌ No solution generated for `{action}`.")
+                        continue
 
-                st.markdown(
-                    (
-                        f"🏅 Reward: <span class='reward-success'>{reward:.2f}</span>"
-                        if reward > 0
-                        else f"🏅 Reward: <span class='reward-fail'>{reward:.2f}</span>"
-                    ),
-                    unsafe_allow_html=True,
-                )
-                time.sleep(0.5)
+                    try:
+                        local_scope = {}
+                        exec(solution_code, globals(), local_scope)
+                        second_largest = local_scope.get("second_largest")
+
+                        if not second_largest:
+                            raise ValueError(
+                                "Function 'second_largest' not found in generated code"
+                            )
+
+                        tracemalloc.start()
+                        start_time = time.time()
+                        result = second_largest(array)
+                        execution_time = time.time() - start_time
+                        current, peak = tracemalloc.get_traced_memory()
+                        tracemalloc.stop()
+
+                        accuracy = 1.0 if result == expected_output else 0
+                        efficiency_score = 1 / (execution_time + 1e-6)
+                        space_score = 1 / (peak + 1e-6)
+                        reward = (
+                            (accuracy * 10) + (efficiency_score * 100) + (space_score * 50)
+                        )
+
+                        rewards[action].append(reward)
+
+                        st.markdown(
+                            f"""
+                            **🛠 Strategy:** `{action}`  
+                            ✅ **Accuracy:** `{accuracy:.2f}`  
+                            ⏱ **Execution Time:** `{execution_time:.6f} sec`  
+                            💾 **Memory Used:** `{peak / 1024:.2f} KB`  
+                            🏅 **Reward:** `{reward:.2f}`
+                            """,
+                            unsafe_allow_html=True,
+                        )
+                    except Exception as e:
+                        st.markdown(f"❌ Error in `{action}`: `{str(e)}`")
+                        rewards[action].append(-10)
+
+                    time.sleep(0.5)
 
     # ---- PLOT PERFORMANCE ----
     fig, ax = plt.subplots()
