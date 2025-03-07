@@ -10,6 +10,28 @@ import matplotlib.pyplot as plt
 import requests
 from langchain.llms import Ollama
 
+if "q_table" not in st.session_state:
+    st.session_state.q_table = {}  # { state (test case): {action: Q-value} }
+
+
+def update_q_table(test_case, action, reward, alpha=0.1, gamma=0.9):
+    """Updates the Q-table using the Q-learning formula."""
+    if test_case not in st.session_state.q_table:
+        st.session_state.q_table[test_case] = {}
+
+    # Get current Q-value for (test_case, action), default to 0 if new
+    current_q = st.session_state.q_table[test_case].get(action, 0)
+
+    # Estimate future rewards (best known reward for this test case)
+    max_future_q = max(st.session_state.q_table[test_case].values(), default=0)
+
+    # Apply the Q-learning update rule
+    new_q = current_q + alpha * (reward + gamma * max_future_q - current_q)
+
+    # Store updated Q-value
+    st.session_state.q_table[test_case][action] = new_q
+
+
 # ---- APP CONFIG ----
 st.set_page_config(page_title="AI Learning: Reinforcement Training", layout="wide")
 
@@ -90,40 +112,63 @@ def generate_solutions():
 
     return solutions
 
-
-def evaluate_solution(solution_code, array, expected_output):
-    """Runs and evaluates the AI-generated solution."""
+def evaluate_solution(solution_code, array, expected_output, action):
+    """Runs and evaluates the AI-generated solution and updates Q-table."""
     if not solution_code:
-        return 0
+        update_q_table(tuple(array), action, -10)  # Penalize missing solutions
+        return -10
 
     try:
         local_scope = {}
         exec(solution_code, globals(), local_scope)
         second_largest = local_scope.get("second_largest")
+
         if not second_largest:
             raise ValueError("Function 'second_largest' not found in generated code")
 
         tracemalloc.start()
-
         start_time = time.time()
         result = second_largest(array)
         execution_time = time.time() - start_time
-
         current, peak = tracemalloc.get_traced_memory()
         tracemalloc.stop()
 
+        # Compute reward (same advanced strategy as before)
         accuracy = 1.0 if result == expected_output else 0
-        efficiency_score = 1 / (execution_time + 1e-6)
-        space_score = 1 / (peak + 1e-6)
-
-        reward = (accuracy * 10) + (efficiency_score * 100) + (space_score * 50)
-        print(
-            f"Accuracy: {accuracy:.2f}, Execution Time: {execution_time:.6f} sec, Memory Used: {peak / 1024:.2f} KB, Reward: {reward:.2f}"
+        time_efficiency = max(0, 1 - (execution_time / 0.001))
+        memory_efficiency = max(0, 1 - (peak / 1024 / 10))
+        complexity_penalty = min(1, len(array) / 100)
+        edge_case_penalty = (
+            -2 if len(array) < 2 else (-1 if len(set(array)) == 1 else 0)
         )
 
+        reward = (
+            accuracy * 10
+            + time_efficiency * 50
+            + memory_efficiency * 30
+            - complexity_penalty * 10
+            + edge_case_penalty
+        )
+
+        # Update Q-table with the new reward
+        update_q_table(tuple(array), action, reward)
+
         return reward
-    except Exception:
+
+    except Exception as e:
+        update_q_table(tuple(array), action, -10)  # Penalize errors
         return -10
+
+
+def select_best_strategy(test_case):
+    """Selects the best strategy for a test case based on Q-table values."""
+    if test_case in st.session_state.q_table:
+        return max(
+            st.session_state.q_table[test_case],
+            key=st.session_state.q_table[test_case].get,
+            default=None,
+        )
+    return None  # No data yet
 
 
 # ---- SIDEBAR PROBLEM DESCRIPTION ----
@@ -256,45 +301,23 @@ if st.button("🚀 Run Evaluations", key="evaluate"):
                         st.markdown(f"❌ No solution generated for `{action}`.")
                         continue
 
-                    try:
-                        local_scope = {}
-                        exec(solution_code, globals(), local_scope)
-                        second_largest = local_scope.get("second_largest")
+                    reward = evaluate_solution(solution_code, array, expected_output, action)  # ✅ CALLING evaluate_solution()
 
-                        if not second_largest:
-                            raise ValueError(
-                                "Function 'second_largest' not found in generated code"
-                            )
+                    # Store reward
+                    rewards[action].append(reward)
 
-                        tracemalloc.start()
-                        start_time = time.time()
-                        result = second_largest(array)
-                        execution_time = time.time() - start_time
-                        current, peak = tracemalloc.get_traced_memory()
-                        tracemalloc.stop()
+                    # Display the evaluation results
+                    st.markdown(
+                        f"""
+                        **🛠 Strategy:** `{action}`
+                        ✅ **Accuracy:** `{1.0 if reward > 0 else 0:.2f}`
+                        ⏱ **Execution Time:** `Check Q-table`
+                        💾 **Memory Used:** `Check Q-table`
+                        🏅 **Reward:** `{reward:.2f}`
+                        """,
+                        unsafe_allow_html=True,
+                    )
 
-                        accuracy = 1.0 if result == expected_output else 0
-                        efficiency_score = 1 / (execution_time + 1e-6)
-                        space_score = 1 / (peak + 1e-6)
-                        reward = (
-                            (accuracy * 10) + (efficiency_score * 100) + (space_score * 50)
-                        )
-
-                        rewards[action].append(reward)
-
-                        st.markdown(
-                            f"""
-                            **🛠 Strategy:** `{action}`  
-                            ✅ **Accuracy:** `{accuracy:.2f}`  
-                            ⏱ **Execution Time:** `{execution_time:.6f} sec`  
-                            💾 **Memory Used:** `{peak / 1024:.2f} KB`  
-                            🏅 **Reward:** `{reward:.2f}`
-                            """,
-                            unsafe_allow_html=True,
-                        )
-                    except Exception as e:
-                        st.markdown(f"❌ Error in `{action}`: `{str(e)}`")
-                        rewards[action].append(-10)
 
                     time.sleep(0.5)
 
@@ -324,3 +347,11 @@ if st.button("🚀 Run Evaluations", key="evaluate"):
 
     st.markdown(f"## 🏆 Best Strategy Selected: `{best_strategy}`")
     st.markdown(f"### 🎯 Average Reward: `{avg_rewards[best_strategy]:.2f}`")
+
+with st.expander("📊 Q-Table (AI Learning Progress)", expanded=True):
+    st.markdown("### 🔎 Reinforcement Learning Q-Table")
+    for test_case, strategies in st.session_state.q_table.items():
+        st.markdown(f"**Test Case:** `{test_case}`")
+        for action, q_value in strategies.items():
+            st.markdown(f"- **{action}** → Q-Value: `{q_value:.2f}`")
+        st.markdown("---")  # Separator for readability
