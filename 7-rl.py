@@ -523,8 +523,14 @@ with tabs[5]:
 with tabs[6]:
     with st.expander("📊 Q-Table (AI Learning Progress)", expanded=True):
         st.markdown("### 🔎 Reinforcement Learning Q-Table")
+
+        # Convert Q-Table to a structured DataFrame
+        q_table_data = []
         for test_case, strategies in st.session_state.q_table.items():
-            st.markdown(f"**Test Case:** `{test_case}`")
             for action, q_value in strategies.items():
-                st.markdown(f"- **{action}** → Q-Value: `{q_value:.2f}`")
-            st.markdown("---")  # Separator for readability
+                q_table_data.append([test_case, action, round(q_value, 2)])
+
+        df = pd.DataFrame(q_table_data, columns=["Test Case", "Action", "Q-Value"])
+
+        # Display table
+        st.dataframe(df, use_container_width=True)
