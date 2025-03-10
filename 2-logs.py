@@ -236,6 +236,27 @@ with tabs[2]:
         st.markdown("**Tokenized Log Sequences (Nonzero Values Only)**")
         st.code(f"X: [{values_str}]\n(Indexes: [{indexes_str}])", language="python")
 
+        # Sample log data
+        logs = ["User login successful", "Authentication failed", "User logged out", "Disk error detected"]
+
+        # Step 1: TF-IDF Vectorization
+        vectorizer = TfidfVectorizer(analyzer="word", ngram_range=(1, 2))
+        X_tfidf = vectorizer.fit_transform(logs)
+
+        # Step 2: Label Encoding
+        label_encoder = LabelEncoder()
+        y_labels = label_encoder.fit_transform(logs)
+
+        # Create DataFrame for visualization
+        df_transformed = pd.DataFrame({
+            "Raw Log": logs,
+            "TF-IDF Vector (Sample)": [X_tfidf[i].toarray()[0][:5] for i in range(len(logs))],
+            "Encoded Label": y_labels
+        })
+
+        st.write("### 🔢 Log Transformation Example")
+        st.dataframe(df_transformed)
+
     else:
         st.info("Carregue os logs na etapa 1 para visualizar os eventos tokenizados.")
 
