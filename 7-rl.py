@@ -32,36 +32,81 @@ actions = [
 
 # ---- AI CODE GENERATION ----
 def generate_solutions():
-    """Streams AI solutions for selected strategies."""
+    """Streams AI solutions for selected strategies with real-time status updates."""
     solutions = {}
-    with st.spinner(f"🔄 Generating code functions..."):
-        for action in selected_actions:  # Use only user-selected strategies
-            with st.expander(f"✨ Strategy: {action}"):
-                
-                    placeholder = st.empty()
+    total_actions = len(selected_actions)
 
-                    prompt = f"""
-                    Write a Python function named `second_largest` that finds the second largest distinct element in an array.
-                    Use this approach: {action}. Ensure the function handles edge cases properly.
-                    Only return the function implementation, no explanations or test cases.
-                    """
+    progress_bar = st.progress(0)  # Overall progress indicator
+    step_progress = 1 / total_actions  # Progress per strategy
 
-                    # Stream response
-                    response = ""
-                    for chunk in llm.stream(prompt):  # Streaming the response
-                        response += chunk
-                        placeholder.markdown(
-                            f"```python\n{response}\n```"
-                        )  # Update UI in real-time
+    with st.spinner("🔄 Generating AI code functions..."):
+        for i, action in enumerate(
+            selected_actions
+        ):  # Loop through selected strategies
+            # ✅ Create a dynamic card for each strategy (always visible)
+            status_placeholder = st.empty()
+            code_placeholder = st.empty()
 
-                    # Extract and finalize the function code
-                    match = re.search(r"```python\n(.*?)```", response, re.DOTALL)
-                    solutions[action] = (
-                        match.group(1).strip() if match else response.strip()
-                    )
+            status_placeholder.markdown(
+                f"""
+                <div style="
+                    padding: 12px;
+                    border-radius: 8px;
+                    background-color: #f5f5f5;
+                    box-shadow: 2px 2px 5px rgba(0,0,0,0.1);
+                    margin-bottom: 10px;
+                    font-size: 16px;">
+                    ✨ <b>Building Strategy:</b> {action} ... ⏳
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
 
-                    # Replace placeholder with final code block
-                    placeholder.code(solutions[action], language="python")
+            prompt = f"""
+            Write a Python function named `second_largest` that finds the second largest distinct element in an array.
+            Use this approach: {action}. Ensure the function handles edge cases properly.
+            Only return the function implementation, no explanations or test cases.
+            """
+
+            # Step 1: Show "Fetching AI Response..."
+            time.sleep(0.5)  # Small delay for effect
+            status_placeholder.markdown(
+                f"🚀 **Generating `{action}` function... Please wait!**"
+            )
+
+            # Step 2: Stream AI Response (Real-time code display)
+            response = ""
+            for chunk in llm.stream(prompt):
+                response += chunk
+                code_placeholder.markdown(
+                    f"```python\n{response}\n```"
+                )  # Update UI dynamically
+
+            # Step 3: Process & Clean Response
+            match = re.search(r"```python\n(.*?)```", response, re.DOTALL)
+            solutions[action] = match.group(1).strip() if match else response.strip()
+
+            # Step 4: Display Final Code
+            code_placeholder.code(solutions[action], language="python")
+
+            # Step 5: Show Success ✅
+            status_placeholder.markdown(
+                f"""
+                <div style="
+                    padding: 12px;
+                    border-radius: 8px;
+                    background-color: #e3f2fd;
+                    box-shadow: 2px 2px 5px rgba(0,0,0,0.1);
+                    margin-bottom: 10px;
+                    font-size: 16px;">
+                    ✅ <b>Completed:</b> {action} function is ready! 🎉
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+            # Update Progress Bar
+            progress_bar.progress(min((i + 1) * step_progress, 1.0))
 
     return solutions
 
