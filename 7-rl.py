@@ -10,54 +10,6 @@ import matplotlib.pyplot as plt
 import requests
 from langchain.llms import Ollama
 
-if "q_table" not in st.session_state:
-    st.session_state.q_table = {}  # { state (test case): {action: Q-value} }
-
-
-def update_q_table(test_case, action, reward, alpha=0.1, gamma=0.9):
-    """Updates the Q-table using the Q-learning formula."""
-    if test_case not in st.session_state.q_table:
-        st.session_state.q_table[test_case] = {}
-
-    # Get current Q-value for (test_case, action), default to 0 if new
-    current_q = st.session_state.q_table[test_case].get(action, 0)
-
-    # Estimate future rewards (best known reward for this test case)
-    max_future_q = max(st.session_state.q_table[test_case].values(), default=0)
-
-    # Apply the Q-learning update rule
-    new_q = current_q + alpha * (reward + gamma * max_future_q - current_q)
-
-    # Store updated Q-value
-    st.session_state.q_table[test_case][action] = new_q
-
-
-# ---- APP CONFIG ----
-st.set_page_config(page_title="AI Learning: Reinforcement Training", layout="wide")
-
-# ---- STYLING ----
-st.markdown(
-    """
-    <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #f5f5f7; color: #1d1d1f; }
-        .header { text-align: center; font-size: 2em; font-weight: bold; }
-        .highlight { background: #e3f2fd; padding: 10px; border-radius: 5px; }
-        .correct { color: green; font-weight: bold; }
-        .incorrect { color: red; font-weight: bold; }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
-# ---- HEADER ----
-st.markdown(
-    "<h1 class='header'>🤖 AI Learning: Reinforcement Training</h1>",
-    unsafe_allow_html=True,
-)
-
-# ---- LLM SETUP ----
-llm = Ollama(model="mistral")
-
 # ---- TEST CASES ----
 TEST_CASES = [
     ([1, 2, 3, 4, 5], 4),
@@ -111,6 +63,7 @@ def generate_solutions():
                 placeholder.code(solutions[action], language="python")
 
     return solutions
+
 
 def evaluate_solution(solution_code, array, expected_output, action):
     """Runs and evaluates the AI-generated solution and updates Q-table."""
@@ -171,6 +124,55 @@ def select_best_strategy(test_case):
     return None  # No data yet
 
 
+if "q_table" not in st.session_state:
+    st.session_state.q_table = {}  # { state (test case): {action: Q-value} }
+
+
+def update_q_table(test_case, action, reward, alpha=0.1, gamma=0.9):
+    """Updates the Q-table using the Q-learning formula."""
+    if test_case not in st.session_state.q_table:
+        st.session_state.q_table[test_case] = {}
+
+    # Get current Q-value for (test_case, action), default to 0 if new
+    current_q = st.session_state.q_table[test_case].get(action, 0)
+
+    # Estimate future rewards (best known reward for this test case)
+    max_future_q = max(st.session_state.q_table[test_case].values(), default=0)
+
+    # Apply the Q-learning update rule
+    new_q = current_q + alpha * (reward + gamma * max_future_q - current_q)
+
+    # Store updated Q-value
+    st.session_state.q_table[test_case][action] = new_q
+
+
+# ---- LLM SETUP ----
+llm = Ollama(model="mistral")
+
+# ---- APP CONFIG ----
+st.set_page_config(page_title="AI Learning: Reinforcement Training", layout="wide")
+
+# ---- CUSTOM STYLES ----
+st.markdown(
+    """
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #f5f5f7; color: #1d1d1f; }
+        .header { text-align: center; font-size: 2em; font-weight: bold; padding: 10px; }
+        .card { background: #fff; padding: 15px; border-radius: 12px; box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1); margin-bottom: 15px; }
+        .highlight { background: #e3f2fd; padding: 10px; border-radius: 5px; }
+        .correct { color: green; font-weight: bold; }
+        .incorrect { color: red; font-weight: bold; }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+# ---- HEADER ----
+st.markdown(
+    "<h1 class='header'>🤖 AI Learning: Reinforcement Training</h1>",
+    unsafe_allow_html=True,
+)
+
 # ---- SIDEBAR PROBLEM DESCRIPTION ----
 st.sidebar.header("📖 Problem Description")
 
@@ -202,73 +204,53 @@ num_scenarios = st.sidebar.slider(
 selected_actions = actions[:num_strategies]
 selected_test_cases = TEST_CASES[:num_scenarios]
 
-# ---- MAIN INTERFACE ----
+# ---- TABBED LAYOUT ----
+tabs = st.tabs(
+    ["Context", "Strategies", "Tests", "Reward", "Generate Code", "Evaluate"]
+)
 
-# ---- DISPLAY SELECTED TEST CASES ----
-st.markdown("### 🧪 Test Scenarios")
-with st.expander("📌 Selected Test Cases", expanded=True):
-    for i, (array, expected_output) in enumerate(selected_test_cases):
-        st.markdown(f"**Test {i+1}:** `{array}` → Expected Output: `{expected_output}`")
-
-# ---- DISPLAY SELECTED STRATEGIES ----
-with st.expander("🛠 Selected AI Strategies", expanded=True):
-    st.markdown("Here are the AI strategies used for solving the problem:")
-    for action in selected_actions:
-        st.markdown(f"- **{action}**")
-
-
-# ---- DISPLAY THE EVALUATION FUNCTION ----
-with st.expander("🔎 View Evaluation Function", expanded=False):
-    st.markdown("### 🧠 How AI Solutions Are Evaluated")
-    st.code(
+# ---- CONTEXT TAB ----
+with tabs[0]:
+    st.markdown(
         """
-def evaluate_solution(solution_code, array, expected_output):
-    \"\"\"Runs and evaluates the AI-generated solution.\"\"\"
-    if not solution_code:
-        return 0
-
-    try:
-        local_scope = {}
-        exec(solution_code, globals(), local_scope)
-        second_largest = local_scope.get("second_largest")
-
-        if not second_largest:
-            raise ValueError("Function 'second_largest' not found in generated code")
-
-        tracemalloc.start()
-
-        start_time = time.time()
-        result = second_largest(array)
-        execution_time = time.time() - start_time
-
-        current, peak = tracemalloc.get_traced_memory()
-        tracemalloc.stop()
-
-        accuracy = 1.0 if result == expected_output else 0
-        efficiency_score = 1 / (execution_time + 1e-6)
-        space_score = 1 / (peak + 1e-6)
-
-        reward = (accuracy * 10) + (efficiency_score * 100) + (space_score * 50)
-        
-        return {
-            "Accuracy": accuracy,
-            "Execution Time": execution_time,
-            "Memory Used": peak / 1024,  # Convert to KB
-            "Reward": reward
-        }
-    except Exception as e:
-        return {
-            "Accuracy": 0,
-            "Execution Time": "Error",
-            "Memory Used": "Error",
-            "Reward": -10,
-            "Error": str(e),
-        }
-        """,
-        language="python",
+        ## 🌎 Context
+        """
     )
-
-with st.expander(f"🤖 AI Prompt"):
+    st.markdown(
+        """
+            AI models often need to select the best strategy for solving a problem. **Reinforcement Learning** helps models improve by rewarding good decisions and penalizing bad ones. 
+            In this demonstration, we use **Q-learning** to refine AI's ability to pick the best approach for finding the second largest element in an array.
+        """
+    )
+    st.markdown(
+        """
+        ## 📖 The Problem
+        """
+    )
+    st.markdown(
+        """
+            **Finding the Second Largest Element**
+            - Given a list of integers, our goal is to **find the second largest distinct number**.
+            - If there's no second distinct number, return `-1`.
+            - AI will generate and evaluate multiple strategies to solve this problem efficiently.
+            
+            ### 🔍 **Example 1:**
+            - **Input:** `[10, 20, 20, 5, 8]`
+            - **Process:**
+            - The largest number is `20`.
+            - The second largest distinct number is `10`.
+            - **Output:** `10`
+            
+            ### 🔍 **Example 2:**
+            - **Input:** `[5, 5, 5]`
+            - **Output:** `-1` (No second distinct number)
+            """
+    )
+    st.markdown(
+        """
+            ## 🤖 AI Prompt
+            """
+    )
     st.markdown(
         """
                 Write a Python function named `second_largest` that finds the second largest distinct element in an array.
@@ -277,81 +259,174 @@ with st.expander(f"🤖 AI Prompt"):
         """
     )
 
-if st.button("📜 Generate Code Functions using AI", key="generate"):
-    st.markdown("### 📝 AI-Generated Solutions")
-    st.session_state.solutions = generate_solutions()
 
-if st.button("🚀 Run Evaluations", key="evaluate"):
-    if not st.session_state.solutions:
-        st.warning("Please generate solutions first!")
-    else:
-        st.markdown("### 🔄 AI Learning Process")
-        rewards = {
-            action: [] for action in selected_actions
-        }  # Use only selected strategies
+# ---- STRATEGIES TAB ----
+with tabs[1]:
+    st.markdown("## ⚙️ AI Strategies")
+    strategies_description = {
+        "Sort and find second last": "Sort the list and pick the second last unique element.",
+        "Single pass scan with two variables": "Keep track of the largest and second largest in a single loop.",
+        "Use set to remove duplicates, then find max": "Remove duplicates first, then find the second highest.",
+        "Brute force nested loop approach": "Compare each element with every other element.",
+        "Alternative logic-based approach": "A custom method designed by the AI.",
+    }
+    for strategy, description in strategies_description.items():
+        st.markdown(f"- **{strategy}** → {description}")
 
-        for i, (array, expected_output) in enumerate(
-            selected_test_cases
-        ):  # Use only selected test cases
-            with st.expander(f"🧪 Test Case {i+1}: `{array}`"):
-                st.markdown(f"✅ Expected Output: `{expected_output}`")
-
-                for action, solution_code in st.session_state.solutions.items():
-                    if not solution_code:
-                        st.markdown(f"❌ No solution generated for `{action}`.")
-                        continue
-
-                    reward = evaluate_solution(solution_code, array, expected_output, action)  # ✅ CALLING evaluate_solution()
-
-                    # Store reward
-                    rewards[action].append(reward)
-
-                    # Display the evaluation results
-                    st.markdown(
-                        f"""
-                        **🛠 Strategy:** `{action}`
-                        ✅ **Accuracy:** `{1.0 if reward > 0 else 0:.2f}`
-                        ⏱ **Execution Time:** `Check Q-table`
-                        💾 **Memory Used:** `Check Q-table`
-                        🏅 **Reward:** `{reward:.2f}`
-                        """,
-                        unsafe_allow_html=True,
-                    )
-
-
-                    time.sleep(0.5)
-
-    # ---- PLOT PERFORMANCE ----
-    fig, ax = plt.subplots()
-    for action, reward_values in rewards.items():
-        ax.plot(
-            range(1, len(selected_test_cases) + 1),
-            reward_values,
-            marker="o",
-            linestyle="-",
-            label=action,
+# ---- TESTS TAB ----
+with tabs[2]:
+    # ---- DISPLAY SELECTED TEST CASES ----
+    st.markdown("### 🧪 Test Scenarios")
+    for i, (array, expected_output) in enumerate(selected_test_cases):
+        st.markdown(
+            f"- **Test {i+1}:** `{array}` → Expected Output: `{expected_output}`"
         )
 
-    ax.set_xlabel("Test Cases")
-    ax.set_ylabel("Reward Score")
-    ax.set_title("📊 AI Strategy Performance Across Test Cases")
-    ax.legend()
-    ax.grid()
-    st.pyplot(fig)
 
-    # ---- SELECT BEST STRATEGY ----
-    avg_rewards = {
-        action: np.mean(reward_values) for action, reward_values in rewards.items()
-    }
-    best_strategy = max(avg_rewards, key=avg_rewards.get)
+# ---- REWARDS TAB ----
+with tabs[3]:
+    st.markdown("### 🧠 How AI Solutions Are Evaluated")
+    with st.expander("evaluate_solution"):
+        st.code(
+            """
+    def evaluate_solution(solution_code, array, expected_output):
+        \"\"\"Runs and evaluates the AI-generated solution.\"\"\"
+        if not solution_code:
+            return 0
 
-    st.markdown(f"## 🏆 Best Strategy Selected: `{best_strategy}`")
-    st.markdown(f"### 🎯 Average Reward: `{avg_rewards[best_strategy]:.2f}`")
+        try:
+            local_scope = {}
+            exec(solution_code, globals(), local_scope)
+            second_largest = local_scope.get("second_largest")
 
-with st.expander("📊 Q-Table (AI Learning Progress)", expanded=True):
-    st.markdown("### 🔎 Reinforcement Learning Q-Table")
-    for test_case, strategies in st.session_state.q_table.items():
-        st.markdown(f"**Test Case:** `{test_case}`")
-        for action, q_value in strategies.items():
-            st.markdown(f"- **{action}** → Q-Value: `{q_value:.2f}`")
-        st.markdown("---")  # Separator for readability
+            if not second_largest:
+                raise ValueError("Function 'second_largest' not found in generated code")
+
+            tracemalloc.start()
+
+            start_time = time.time()
+            result = second_largest(array)
+            execution_time = time.time() - start_time
+
+            current, peak = tracemalloc.get_traced_memory()
+            tracemalloc.stop()
+
+            accuracy = 1.0 if result == expected_output else 0
+            efficiency_score = 1 / (execution_time + 1e-6)
+            space_score = 1 / (peak + 1e-6)
+
+            reward = (accuracy * 10) + (efficiency_score * 100) + (space_score * 50)
+            
+            return {
+                "Accuracy": accuracy,
+                "Execution Time": execution_time,
+                "Memory Used": peak / 1024,  # Convert to KB
+                "Reward": reward
+            }
+        except Exception as e:
+            return {
+                "Accuracy": 0,
+                "Execution Time": "Error",
+                "Memory Used": "Error",
+                "Reward": -10,
+                "Error": str(e),
+            }
+            """,
+            language="python",
+        )
+    # ---- REWARD FUNCTION ----
+    st.markdown("## 🏆 The Reward Function")
+    st.markdown(
+        """
+            The AI receives **rewards or penalties** based on how well a strategy performs. The reward function considers:
+            - ✅ **Accuracy** → Whether the strategy finds the correct answer.
+            - ⚡ **Efficiency** → Execution speed and memory usage.
+            - 🔄 **Adaptability** → Handling edge cases like duplicates and small lists.
+            
+            The AI adjusts its strategy selection based on past rewards, continuously learning and improving.
+            """
+    )
+
+# ---- CODE GENERATION TAB ----
+with tabs[4]:
+    if st.button("📜 Generate Code Functions using AI", key="generate"):
+        st.markdown("### 📝 AI-Generated Solutions")
+        st.session_state.solutions = generate_solutions()
+
+# ---- CODE GENERATION TAB ----
+with tabs[4]:
+    if st.button("🚀 Run Evaluations", key="evaluate"):
+        if not st.session_state.solutions:
+            st.warning("Please generate solutions first!")
+        else:
+            st.markdown("### 🔄 AI Learning Process")
+            rewards = {
+                action: [] for action in selected_actions
+            }  # Use only selected strategies
+
+            for i, (array, expected_output) in enumerate(
+                selected_test_cases
+            ):  # Use only selected test cases
+                with st.expander(f"🧪 Test Case {i+1}: `{array}`"):
+                    st.markdown(f"✅ Expected Output: `{expected_output}`")
+
+                    for action, solution_code in st.session_state.solutions.items():
+                        if not solution_code:
+                            st.markdown(f"❌ No solution generated for `{action}`.")
+                            continue
+
+                        reward = evaluate_solution(
+                            solution_code, array, expected_output, action
+                        )  # ✅ CALLING evaluate_solution()
+
+                        # Store reward
+                        rewards[action].append(reward)
+
+                        # Display the evaluation results
+                        st.markdown(
+                            f"""
+                            **🛠 Strategy:** `{action}`
+                            ✅ **Accuracy:** `{1.0 if reward > 0 else 0:.2f}`
+                            ⏱ **Execution Time:** `Check Q-table`
+                            💾 **Memory Used:** `Check Q-table`
+                            🏅 **Reward:** `{reward:.2f}`
+                            """,
+                            unsafe_allow_html=True,
+                        )
+
+                        time.sleep(0.5)
+
+        # ---- PLOT PERFORMANCE ----
+        fig, ax = plt.subplots()
+        for action, reward_values in rewards.items():
+            ax.plot(
+                range(1, len(selected_test_cases) + 1),
+                reward_values,
+                marker="o",
+                linestyle="-",
+                label=action,
+            )
+
+        ax.set_xlabel("Test Cases")
+        ax.set_ylabel("Reward Score")
+        ax.set_title("📊 AI Strategy Performance Across Test Cases")
+        ax.legend()
+        ax.grid()
+        st.pyplot(fig)
+
+        # ---- SELECT BEST STRATEGY ----
+        avg_rewards = {
+            action: np.mean(reward_values) for action, reward_values in rewards.items()
+        }
+        best_strategy = max(avg_rewards, key=avg_rewards.get)
+
+        st.markdown(f"## 🏆 Best Strategy Selected: `{best_strategy}`")
+        st.markdown(f"### 🎯 Average Reward: `{avg_rewards[best_strategy]:.2f}`")
+
+# with st.expander("📊 Q-Table (AI Learning Progress)", expanded=True):
+#     st.markdown("### 🔎 Reinforcement Learning Q-Table")
+#     for test_case, strategies in st.session_state.q_table.items():
+#         st.markdown(f"**Test Case:** `{test_case}`")
+#         for action, q_value in strategies.items():
+#             st.markdown(f"- **{action}** → Q-Value: `{q_value:.2f}`")
+#         st.markdown("---")  # Separator for readability
