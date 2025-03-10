@@ -31,6 +31,7 @@ tabs = st.tabs(
         "🔄 Tokenization",
         "🤖 Train Model",
         "🔮 Predict Events",
+        "🔗 Relações entre Eventos",
     ]
 )
 
@@ -180,107 +181,6 @@ with tabs[1]:
             ax2.set_title("Top 10 Eventos")
             ax2.grid(True)
             st.pyplot(fig2)
-        
-        
-        with st.expander("Log Transitions Network Graph"):
-            if "parsed_logs" in st.session_state:
-
-                label_encoder = LabelEncoder()
-
-                # Ensure y_labels and label_encoder are available
-                if "y_labels" not in st.session_state or "label_encoder" not in st.session_state:
-                    logs_pred = st.session_state["parsed_logs"].dropna(subset=["event"]).copy()
-                    logs_pred["event_clean"] = logs_pred["event"].apply(clean_log_entry)
-                    tfidf_vectorizer_temp = TfidfVectorizer(analyzer="word", ngram_range=(1, 2))
-                    tfidf_vectorizer_temp.fit(logs_pred["event_clean"])
-                    label_encoder_temp = LabelEncoder()
-                    y_labels = label_encoder_temp.fit_transform(logs_pred["event_clean"])
-                    st.session_state["y_labels"] = y_labels
-                    st.session_state["label_encoder"] = label_encoder_temp
-                else:
-                    y_labels = st.session_state["y_labels"]
-                    label_encoder = st.session_state["label_encoder"]
-
-                # 🎯 Limit to top N most common transitions for clarity
-                TOP_N_EVENTS = 100
-
-                # 🔄 Count transitions between consecutive log events
-                transition_counts = Counter(zip(y_labels[:-1], y_labels[1:]))
-                top_transitions = dict(transition_counts.most_common(TOP_N_EVENTS))
-
-                # 🎨 Create a directed graph focusing on top transitions
-                G = nx.DiGraph()
-                for (event1, event2), count in top_transitions.items():
-                    G.add_edge(event1, event2, weight=count)
-
-                # 📌 Define node labels as the original log event texts
-                node_labels = {i: label_encoder.inverse_transform([i])[0] for i in G.nodes()}
-
-                # 🎨 Define event categories for color mapping
-                event_categories = ["auth", "system", "network", "error", "unknown"]
-                event_colors = ["#4CAF50", "#2196F3", "#FF9800", "#F44336", "#9E9E9E"]
-
-                # 🔄 Assign categories based on event type keywords
-                def categorize_event(event_text):
-                    if "authentication" in event_text or "login" in event_text:
-                        return "auth"
-                    elif "systemd" in event_text or "service" in event_text:
-                        return "system"
-                    elif "network" in event_text or "IP" in event_text:
-                        return "network"
-                    elif "error" in event_text or "failure" in event_text:
-                        return "error"
-                    return "unknown"
-
-                category_map = {node: categorize_event(node_labels[node]) for node in G.nodes()}
-                node_colors = [
-                    event_colors[event_categories.index(category_map[node])] for node in G.nodes()
-                ]
-
-                # 📌 Position nodes using a force-directed layout
-                plt.figure(figsize=(14, 10))
-                pos = nx.spring_layout(G, seed=42, k=0.9)
-
-                # 🟢 Draw nodes with category-based colors
-                nx.draw_networkx_nodes(
-                    G, pos, node_color=node_colors, node_size=100, alpha=0.95, edgecolors="white"
-                )
-
-                # 🔗 Draw edges with thickness based on transition strength
-                nx.draw_networkx_edges(
-                    G,
-                    pos,
-                    alpha=0.7,
-                    edge_color="gray",
-                    width=[
-                        (top_transitions[(u, v)] / max(top_transitions.values())) * 6
-                        for u, v in G.edges()
-                    ],
-                    arrows=True,
-                    connectionstyle="arc3,rad=0.2",
-                )
-
-                # 🏷️ Draw labels with adaptive font scaling
-                nx.draw_networkx_labels(
-                    G,
-                    pos,
-                    labels=node_labels,
-                    font_size=5,
-                    font_weight="bold",
-                    verticalalignment="center",
-                )
-
-                # 🎨 Add title & remove gridlines
-                plt.title(
-                    "Log Event Transitions",
-                    fontsize=16,
-                    fontweight="bold",
-                    color="#333333",
-                )
-                plt.grid(False)
-
-                # ✅ Display the refined visualization in Streamlit
-                st.pyplot(plt)
 
     else:
         st.info("Por favor, carregue os logs na etapa 1 para visualizar tendências.")
@@ -450,7 +350,7 @@ with tabs[3]:
         st.info("Carregue os logs na etapa 1 para treinar o modelo.")
 
 # ================================
-# 3. Prever Próximo Evento (Machine Learning)
+# 5. Prever Próximo Evento (Machine Learning)
 # ================================
 with tabs[4]:
     if "parsed_logs" in st.session_state:
@@ -483,13 +383,6 @@ with tabs[4]:
                     max_value=int(total_logs),
                     value=0,
                     step=1,
-                )
-
-                # Allow the user to select a log event from the list
-                sample_index = st.selectbox(
-                    "Selecione um log para visualizar a tokenização:",
-                    list(range(len(cleaned_logs))),
-                    format_func=lambda i: f"{i+1}. {cleaned_logs[i][:80]}{'...' if len(cleaned_logs[i])>80 else ''}",
                 )
 
                 # Exibir o log selecionado
@@ -526,96 +419,202 @@ with tabs[4]:
     else:
         st.info("Carregue os logs na etapa 1 para usar o módulo de predição.")
 
-# # Ensure logs exist
-# if "parsed_logs" in st.session_state:
-#     st.header("Grafo: Relações entre Eventos")
+with tabs[5]:
+    # Ensure logs exist
+    if "parsed_logs" in st.session_state:
+        st.header("Grafo: Relações entre Eventos")
 
-#     logs_for_graph = st.session_state["parsed_logs"].dropna(subset=["event"]).copy()
-#     logs_for_graph["event_clean"] = logs_for_graph["event"].apply(clean_log_entry)
+        logs_for_graph = st.session_state["parsed_logs"].dropna(subset=["event"]).copy()
+        logs_for_graph["event_clean"] = logs_for_graph["event"].apply(clean_log_entry)
 
-#     eventos = logs_for_graph["event_clean"].tolist()
-#     transicoes = list(zip(eventos[:-1], eventos[1:]))
-#     transition_counts = collections.Counter(transicoes)
+        eventos = logs_for_graph["event_clean"].tolist()
+        transicoes = list(zip(eventos[:-1], eventos[1:]))
+        transition_counts = collections.Counter(transicoes)
 
-#     G = nx.DiGraph()
-#     for (ev_from, ev_to), count in transition_counts.items():
-#         G.add_edge(ev_from, ev_to, weight=count)
+        G = nx.DiGraph()
+        for (ev_from, ev_to), count in transition_counts.items():
+            G.add_edge(ev_from, ev_to, weight=count)
 
-#     # 🔥 IMPROVED LAYOUT: Kamada-Kawai for better spacing
-#     pos = nx.kamada_kawai_layout(G)
+        # 🔥 IMPROVED LAYOUT: Kamada-Kawai for better spacing
+        pos = nx.kamada_kawai_layout(G)
 
-#     # ✅ Interactive filters: Degree-based node filtering
-#     min_degree, max_degree = st.slider(
-#         "📊 Filtrar por Grau do Nó:",
-#         1,
-#         max(dict(G.degree()).values()),
-#         (1, max(dict(G.degree()).values())),
-#     )
+        # ✅ Interactive filters: Degree-based node filtering
+        min_degree, max_degree = st.slider(
+            "📊 Filtrar por Grau do Nó:",
+            1,
+            max(dict(G.degree()).values()),
+            (1, max(dict(G.degree()).values())),
+        )
 
-#     # Filter nodes by selected degree range
-#     filtered_nodes = [
-#         node for node, degree in G.degree() if min_degree <= degree <= max_degree
-#     ]
-#     G_filtered = G.subgraph(filtered_nodes)
+        # Filter nodes by selected degree range
+        filtered_nodes = [
+            node for node, degree in G.degree() if min_degree <= degree <= max_degree
+        ]
+        G_filtered = G.subgraph(filtered_nodes)
 
-#     # Create edges and nodes for visualization
-#     edge_x, edge_y = [], []
-#     for edge in G_filtered.edges():
-#         x0, y0 = pos[edge[0]]
-#         x1, y1 = pos[edge[1]]
-#         edge_x.extend([x0, x1, None])
-#         edge_y.extend([y0, y1, None])
+        # Create edges and nodes for visualization
+        edge_x, edge_y = [], []
+        for edge in G_filtered.edges():
+            x0, y0 = pos[edge[0]]
+            x1, y1 = pos[edge[1]]
+            edge_x.extend([x0, x1, None])
+            edge_y.extend([y0, y1, None])
 
-#     edge_trace = go.Scatter(
-#         x=edge_x,
-#         y=edge_y,
-#         line=dict(width=0.7, color="#AAA"),
-#         hoverinfo="none",
-#         mode="lines",
-#     )
+        edge_trace = go.Scatter(
+            x=edge_x,
+            y=edge_y,
+            line=dict(width=0.7, color="#AAA"),
+            hoverinfo="none",
+            mode="lines",
+        )
 
-#     # ✅ Better node scaling: Size based on degree
-#     node_x, node_y, node_text, node_size = [], [], [], []
-#     for node in G_filtered.nodes():
-#         x, y = pos[node]
-#         node_x.append(x)
-#         node_y.append(y)
-#         node_text.append(f"{node} (Grau: {G_filtered.degree(node)})")
-#         node_size.append(5 + 3 * G_filtered.degree(node))  # 🔥 Adaptive size
+        # ✅ Better node scaling: Size based on degree
+        node_x, node_y, node_text, node_size = [], [], [], []
+        for node in G_filtered.nodes():
+            x, y = pos[node]
+            node_x.append(x)
+            node_y.append(y)
+            node_text.append(f"{node} (Grau: {G_filtered.degree(node)})")
+            node_size.append(5 + 3 * G_filtered.degree(node))  # 🔥 Adaptive size
 
-#     node_trace = go.Scatter(
-#         x=node_x,
-#         y=node_y,
-#         mode="markers+text",
-#         text=node_text,
-#         textposition="top center",  # 🔥 Improved readability
-#         hoverinfo="text",
-#         marker=dict(
-#             showscale=True,
-#             colorscale="Blues",
-#             reversescale=True,
-#             color=node_size,  # 🔥 Degree-based coloring
-#             size=node_size,  # 🔥 Degree-based sizing
-#             line=dict(width=2, color="#333"),
-#         ),
-#     )
+        node_trace = go.Scatter(
+            x=node_x,
+            y=node_y,
+            mode="markers+text",
+            text=node_text,
+            textposition="top center",  # 🔥 Improved readability
+            hoverinfo="text",
+            marker=dict(
+                showscale=True,
+                colorscale="Blues",
+                reversescale=True,
+                color=node_size,  # 🔥 Degree-based coloring
+                size=node_size,  # 🔥 Degree-based sizing
+                line=dict(width=2, color="#333"),
+            ),
+        )
 
-#     # ✅ Sleek layout & dark mode optimization
-#     fig_graph = go.Figure(
-#         data=[edge_trace, node_trace],
-#         layout=go.Layout(
-#             title="<b>🔗 Relações entre Eventos</b>",
-#             showlegend=False,
-#             hovermode="closest",
-#             margin=dict(b=20, l=5, r=5, t=40),
-#             xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-#             yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-#             paper_bgcolor="#F7F9FC",
-#             plot_bgcolor="white",
-#         ),
-#     )
+        # ✅ Sleek layout & dark mode optimization
+        fig_graph = go.Figure(
+            data=[edge_trace, node_trace],
+            layout=go.Layout(
+                title="<b>🔗 Relações entre Eventos</b>",
+                showlegend=False,
+                hovermode="closest",
+                margin=dict(b=20, l=5, r=5, t=40),
+                xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+                yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+                paper_bgcolor="#F7F9FC",
+                plot_bgcolor="white",
+            ),
+        )
 
-#     # Render graph
-#     st.plotly_chart(fig_graph, use_container_width=True)
-# else:
-#     st.info("⏳ Carregue os logs na etapa 1 para visualizar o grafo de eventos.")
+        # Render graph
+        st.plotly_chart(fig_graph, use_container_width=True)
+    else:
+        st.info("⏳ Carregue os logs na etapa 1 para visualizar o grafo de eventos.")
+
+# with tabs[3]:
+#     with st.expander("Log Transitions Network Graph"):
+#         if "parsed_logs" in st.session_state:
+
+#             label_encoder = LabelEncoder()
+
+#             # Ensure y_labels and label_encoder are available
+#             if "y_labels" not in st.session_state or "label_encoder" not in st.session_state:
+#                 logs_pred = st.session_state["parsed_logs"].dropna(subset=["event"]).copy()
+#                 logs_pred["event_clean"] = logs_pred["event"].apply(clean_log_entry)
+#                 tfidf_vectorizer_temp = TfidfVectorizer(analyzer="word", ngram_range=(1, 2))
+#                 tfidf_vectorizer_temp.fit(logs_pred["event_clean"])
+#                 label_encoder_temp = LabelEncoder()
+#                 y_labels = label_encoder_temp.fit_transform(logs_pred["event_clean"])
+#                 st.session_state["y_labels"] = y_labels
+#                 st.session_state["label_encoder"] = label_encoder_temp
+#             else:
+#                 y_labels = st.session_state["y_labels"]
+#                 label_encoder = st.session_state["label_encoder"]
+
+#             # 🎯 Limit to top N most common transitions for clarity
+#             TOP_N_EVENTS = 100
+
+#             # 🔄 Count transitions between consecutive log events
+#             transition_counts = Counter(zip(y_labels[:-1], y_labels[1:]))
+#             top_transitions = dict(transition_counts.most_common(TOP_N_EVENTS))
+
+#             # 🎨 Create a directed graph focusing on top transitions
+#             G = nx.DiGraph()
+#             for (event1, event2), count in top_transitions.items():
+#                 G.add_edge(event1, event2, weight=count)
+
+#             # 📌 Define node labels as the original log event texts
+#             node_labels = {i: label_encoder.inverse_transform([i])[0] for i in G.nodes()}
+
+#             # 🎨 Define event categories for color mapping
+#             event_categories = ["auth", "system", "network", "error", "unknown"]
+#             event_colors = ["#4CAF50", "#2196F3", "#FF9800", "#F44336", "#9E9E9E"]
+
+#             # 🔄 Assign categories based on event type keywords
+#             def categorize_event(event_text):
+#                 if "authentication" in event_text or "login" in event_text:
+#                     return "auth"
+#                 elif "systemd" in event_text or "service" in event_text:
+#                     return "system"
+#                 elif "network" in event_text or "IP" in event_text:
+#                     return "network"
+#                 elif "error" in event_text or "failure" in event_text:
+#                     return "error"
+#                 return "unknown"
+
+#             category_map = {node: categorize_event(node_labels[node]) for node in G.nodes()}
+#             node_colors = [
+#                 event_colors[event_categories.index(category_map[node])] for node in G.nodes()
+#             ]
+
+#             # 📌 Position nodes using a force-directed layout
+#             plt.figure(figsize=(14, 10))
+#             pos = nx.spring_layout(G, seed=42, k=0.9)
+
+#             # 🟢 Draw nodes with category-based colors
+#             nx.draw_networkx_nodes(
+#                 G, pos, node_color=node_colors, node_size=100, alpha=0.95, edgecolors="white"
+#             )
+
+#             # 🔗 Draw edges with thickness based on transition strength
+#             nx.draw_networkx_edges(
+#                 G,
+#                 pos,
+#                 alpha=0.7,
+#                 edge_color="gray",
+#                 width=[
+#                     (top_transitions[(u, v)] / max(top_transitions.values())) * 6
+#                     for u, v in G.edges()
+#                 ],
+#                 arrows=True,
+#                 connectionstyle="arc3,rad=0.2",
+#             )
+
+#             # 🏷️ Draw labels with adaptive font scaling
+#             nx.draw_networkx_labels(
+#                 G,
+#                 pos,
+#                 labels=node_labels,
+#                 font_size=5,
+#                 font_weight="bold",
+#                 verticalalignment="center",
+#             )
+
+#             # 🎨 Add title & remove gridlines
+#             plt.title(
+#                 "Log Event Transitions",
+#                 fontsize=16,
+#                 fontweight="bold",
+#                 color="#333333",
+#             )
+#             plt.grid(False)
+
+#             # ✅ Display the refined visualization in Streamlit
+#             st.pyplot(plt)
+#         else:
+#             st.info(
+#                 "Carregue os logs na etapa 1 para visualizar o grafo de transições entre eventos."
+#             )
