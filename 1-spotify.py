@@ -408,14 +408,10 @@ with tabs[1]:
                         "🔢 Number of Similar Users", 3, 20, 10, key="recommendations_user_slider"
                     )
                     top_n_artists = col2.slider(
-                        "🎼 Number of Artists",
-                        3,
-                        50,
-                        10,
-                        key="recommendations_artists_slider",
+                        "🎼 Number of Artists", 3, 50, 10, key="recommendations_artists_slider"
                     )
 
-                    # Use the helper function to compute similar users and recommended artists
+                    # Use helper function to compute similar users and recommended artists
                     similar_users, recommended_artists = get_similar_users_and_recommendations(
                         selected_user, user_artist_matrix, similarity_df, top_n_users=top_n_users
                     )
@@ -423,16 +419,34 @@ with tabs[1]:
                     if not recommended_artists:
                         st.info("⚠️ No recommendations found. The selected user may have already interacted with all artists.")
                     else:
-                        st.subheader(f"Recommended Artists for {selected_user} (Based on Similar Users)")
+                        st.subheader(f"🎵 Recommended Artists for {selected_user}")
 
-                        # Display each recommended artist with a 💡 icon and the suggesting user
-                        for idx, artist in enumerate(recommended_artists[:top_n_artists], start=1):
-                            st.markdown(
-                                f"**{idx}.** 💡 {artist} (Suggested by: {', '.join(similar_users)})"
-                            )
+                        # 🎨 UI Enhancement: Display Recommendations in Cards
+                        cols = st.columns(min(5, len(recommended_artists)))  # Responsive layout
 
-                        # If desired, add a note for recommended artists
-                        st.info(f"Above are the top {top_n_artists} recommended artists based on similar users.")
+                        for idx, artist in enumerate(recommended_artists[:top_n_artists]):
+                            with cols[idx % len(cols)]:  # Distribute cards evenly
+                                st.markdown(
+                                    f"""
+                                    <div style="
+                                        border-radius: 12px;
+                                        padding: 15px;
+                                        margin: 10px;
+                                        background: linear-gradient(135deg, #ff758c, #ff7eb3);
+                                        box-shadow: 3px 3px 10px rgba(0, 0, 0, 0.1);
+                                        text-align: center;
+                                        transition: transform 0.2s ease-in-out;
+                                    " onmouseover="this.style.transform='scale(1.05)'" 
+                                    onmouseout="this.style.transform='scale(1)'">
+                                        <h4 style="color: white; margin: 5px;">🎤 {artist}</h4>
+                                        <p style="color: white; margin: 2px;">Suggested by: {', '.join(similar_users)}</p>
+                                    </div>
+                                    """,
+                                    unsafe_allow_html=True,
+                                )
+
+                        # 📝 Additional Info Section
+                        st.info(f"💡 Above are the top {top_n_artists} recommended artists based on similar users.")
 
         st.success("✅ User similarity matrix ready!")
 
