@@ -59,54 +59,67 @@ def get_similar_users_and_recommendations(
 st.set_page_config(page_title="Spotify Recommender", layout="wide")
 st.title("🎵 Spotify Playlist & Artist Recommender")
 
-# Upload Dataset
-uploaded_file = st.file_uploader("📁 Upload a Spotify Playlist Dataset (CSV)", type=["csv"])
-if uploaded_file:
-    # df = pd.read_csv(uploaded_file)
-    chunk_size = 50000  # Adjust based on memory capacity
+# ---- TABBED LAYOUT ----
+tabs = st.tabs(
+    [
+        "Spotify Dataset",
+        "User Profile",
+        "Artists Clusters",
+    ]
+)
 
-    # 🔄 Load data in chunks
-    chunks = []
+# ---- DATASET TAB ----
+with tabs[0]:
+    # Upload Dataset
+    uploaded_file = st.file_uploader("📁 Upload a Spotify Playlist Dataset (CSV)", type=["csv"])
+    if uploaded_file:
+        # df = pd.read_csv(uploaded_file)
+        chunk_size = 50000  # Adjust based on memory capacity
 
-    for chunk in pd.read_csv(
-        uploaded_file,
-        sep=",",  # Separator
-        quotechar='"',  # Quoting character
-        escapechar="\\",  # Escape character
-        engine="python",  # Python engine handles complex parsing
-        on_bad_lines="skip",  # Skip problematic lines
-        chunksize=chunk_size,  # Read in chunks
-        quoting=csv.QUOTE_NONE,  # Ignore quotes entirely
-        dtype=str,  # Read all columns as strings
-        encoding="ISO-8859-1",  # Handle special characters
-    ):
-        # 🧹 Clean Column Names
-        chunk.columns = chunk.columns.str.replace('"', "").str.strip()
+        # 🔄 Load data in chunks
+        chunks = []
 
-        # 🧹 Clean Cell Values
-        chunk = chunk.applymap(lambda x: x.strip('"').strip() if isinstance(x, str) else x)
+        for chunk in pd.read_csv(
+            uploaded_file,
+            sep=",",  # Separator
+            quotechar='"',  # Quoting character
+            escapechar="\\",  # Escape character
+            engine="python",  # Python engine handles complex parsing
+            on_bad_lines="skip",  # Skip problematic lines
+            chunksize=chunk_size,  # Read in chunks
+            quoting=csv.QUOTE_NONE,  # Ignore quotes entirely
+            dtype=str,  # Read all columns as strings
+            encoding="ISO-8859-1",  # Handle special characters
+        ):
+            # 🧹 Clean Column Names
+            chunk.columns = chunk.columns.str.replace('"', "").str.strip()
 
-        chunks.append(chunk)
+            # 🧹 Clean Cell Values
+            chunk = chunk.applymap(lambda x: x.strip('"').strip() if isinstance(x, str) else x)
 
-    # 📊 Combine all chunks into a single DataFrame
-    df = pd.concat(chunks, ignore_index=True)
-    st.success("✅ Dataset successfully loaded!")
-    st.dataframe(df.head())
+            chunks.append(chunk)
 
-    # Basic Stats
-    st.subheader("📊 Dataset Overview")
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Users", df['user_id'].nunique())
-    col2.metric("Artists", df['artistname'].nunique())
-    col3.metric("Playlists", df['playlistname'].nunique())
-    col4.metric("Tracks", df['trackname'].nunique())
+        # 📊 Combine all chunks into a single DataFrame
+        df = pd.concat(chunks, ignore_index=True)
+        st.success("✅ Dataset successfully loaded!")
+        st.dataframe(df.head())
 
-    # Top Artists Visualization
-    st.subheader("🎤 Top Artists")
-    top_artists = df["artistname"].value_counts().head(20)
-    fig = px.bar(top_artists, x=top_artists.index, y=top_artists.values, title="Top 10 Most Popular Artists")
-    st.plotly_chart(fig)
+        # Basic Stats
+        st.subheader("📊 Dataset Overview")
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("Users", df['user_id'].nunique())
+        col2.metric("Artists", df['artistname'].nunique())
+        col3.metric("Playlists", df['playlistname'].nunique())
+        col4.metric("Tracks", df['trackname'].nunique())
 
+        # Top Artists Visualization
+        st.subheader("🎤 Top Artists")
+        top_artists = df["artistname"].value_counts().head(20)
+        fig = px.bar(top_artists, x=top_artists.index, y=top_artists.values, title="Top 10 Most Popular Artists")
+        st.plotly_chart(fig)
+
+# ---- USER TAB ----
+with tabs[1]:
     # User Summary
     def user_summary(user_id):
         with st.spinner(f"🔍 Loading user profile for {user_id}..."):
@@ -168,6 +181,7 @@ if uploaded_file:
                                 """,
                                 unsafe_allow_html=True,
                             )
+        st.success("✅ User profile loaded!")
 
     # User Input for Recommendation
     st.subheader("🎧 Get Personalized Artist Recommendations")
@@ -183,10 +197,6 @@ if uploaded_file:
         similarity_matrix = cosine_similarity(user_artist_sparse)
         similarity_df = pd.DataFrame(similarity_matrix, index=user_artist_matrix.index, columns=user_artist_matrix.index)
 
-    st.success("✅ User similarity matrix ready!")
-
-    # 📌 Heatmap of Similarity
-    st.subheader("🌐 Matchmaking Network")
     with st.expander(
         "🤝 View User-Artist Interaction Grid - Collaborative Filtering Recommendation"
     ):
@@ -371,6 +381,10 @@ if uploaded_file:
                 # If desired, add a note for recommended artists
                 st.info(f"Above are the top {top_n_artists} recommended artists based on similar users.")
 
+    st.success("✅ User similarity matrix ready!")
+
+# ---- ARTISTS TAB ----
+with tabs[2]:
     def build_artist_cooccurrence_fast(df):
         """
         Build an artist co-occurrence matrix where each cell (i, j)
