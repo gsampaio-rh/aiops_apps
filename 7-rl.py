@@ -219,8 +219,8 @@ tabs = st.tabs(
     [
         "Context",
         "Strategies",
-        "Tests",
         "Reward",
+        "Scenarios",
         "Generate Code",
         "Evaluate",
         "Q-Table ",
@@ -281,28 +281,72 @@ with tabs[0]:
 # ---- STRATEGIES TAB ----
 with tabs[1]:
     st.markdown("## ⚙️ AI Strategies")
-    strategies_description = {
-        "Sort and find second last": "Sort the list and pick the second last unique element.",
-        "Single pass scan with two variables": "Keep track of the largest and second largest in a single loop.",
-        "Use set to remove duplicates, then find max": "Remove duplicates first, then find the second highest.",
-        "Brute force nested loop approach": "Compare each element with every other element.",
-        "Alternative logic-based approach": "A custom method designed by the AI.",
-    }
-    for strategy, description in strategies_description.items():
-        st.markdown(f"- **{strategy}** → {description}")
+    st.markdown(
+        "Explore different approaches to finding the second largest element in a list. Click on a strategy to learn more!"
+    )
 
-# ---- TESTS TAB ----
-with tabs[2]:
-    # ---- DISPLAY SELECTED TEST CASES ----
-    st.markdown("### 🧪 Test Scenarios")
-    for i, (array, expected_output) in enumerate(selected_test_cases):
-        st.markdown(
-            f"- **Test {i+1}:** `{array}` → Expected Output: `{expected_output}`"
-        )
+    strategies = {
+        "Sort and Find Second Last": {
+            "description": "Sort the list in ascending order and pick the second last unique element.",
+            "steps": [
+                "Sort the list.",
+                "Remove duplicates.",
+                "Select the second last element.",
+            ],
+            "example": {"Input": [3, 1, 4, 1, 5], "Output": 4},
+        },
+        "Single Pass Scan with Two Variables": {
+            "description": "Track the two largest values in a single scan, improving efficiency.",
+            "steps": [
+                "Initialize two variables: `largest` and `second_largest`.",
+                "Iterate through the list, updating them as needed.",
+                "Return `second_largest`.",
+            ],
+            "example": {"Input": [3, 1, 4, 1, 5], "Output": 4},
+        },
+        "Use Set to Remove Duplicates, Then Find Max": {
+            "description": "Remove duplicate values first, then find the second highest.",
+            "steps": [
+                "Convert the list to a set to remove duplicates.",
+                "Sort the unique values.",
+                "Return the second last value.",
+            ],
+            "example": {"Input": [3, 1, 4, 1, 5], "Output": 4},
+        },
+        "Brute Force Nested Loop Approach": {
+            "description": "Compare each element with every other element (inefficient but simple).",
+            "steps": [
+                "Use two nested loops.",
+                "Check for the second largest manually.",
+                "Return the result.",
+            ],
+            "example": {"Input": [3, 1, 4, 1, 5], "Output": 4},
+        },
+        "Alternative Logic-Based Approach": {
+            "description": "A custom AI-designed method.",
+            "steps": [
+                "Use a unique logic approach.",
+                "Optimize based on specific constraints.",
+            ],
+            "example": {"Input": [3, 1, 4, 1, 5], "Output": 4},
+        },
+    }
+
+    for strategy, details in strategies.items():
+        with st.expander(f"🔹 **{strategy}**"):
+            st.write(details["description"])
+            st.markdown("**Steps:**")
+            for step in details["steps"]:
+                st.markdown(f"- {step}")
+
+            st.markdown("**Example:**")
+            st.code(
+                f"Input: {details['example']['Input']} → Output: {details['example']['Output']}"
+            )
 
 
 # ---- REWARDS TAB ----
-with tabs[3]:
+with tabs[2]:
     st.markdown("### 🧠 How AI Solutions Are Evaluated")
     with st.expander("evaluate_solution"):
         st.code(
@@ -365,13 +409,21 @@ with tabs[3]:
             """
     )
 
+# ---- SCENARIOS TAB ----
+with tabs[3]:
+    # ---- DISPLAY SELECTED TEST CASES ----
+    st.markdown("### 🧪 Test Scenarios")
+    for i, (array, expected_output) in enumerate(selected_test_cases):
+        st.markdown(
+            f"- **Test {i+1}:** `{array}` → Expected Output: `{expected_output}`"
+        )
+
 # ---- CODE GENERATION TAB ----
 with tabs[4]:
     if st.button("📜 Generate Code Functions using AI", key="generate"):
         st.markdown("### 📝 AI-Generated Solutions")
         st.session_state.solutions = generate_solutions()
 
-## ---- RUN EVALUATION TAB ----
 # ---- RUN EVALUATION TAB ----
 with tabs[5]:
     st.markdown("## 🚀 AI Model Evaluation")
@@ -492,7 +544,7 @@ with tabs[5]:
 
             ax.set_xlabel("Test Cases")
             ax.set_ylabel("Reward Score")
-            ax.set_title("📊 AI Strategy Performance Across Test Cases")
+            ax.set_title("AI Strategy Performance Across Test Cases")
             ax.legend()
             ax.grid()
             st.pyplot(fig)
