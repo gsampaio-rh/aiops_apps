@@ -354,7 +354,7 @@ with tabs[4]:
         st.session_state.solutions = generate_solutions()
 
 # ---- CODE GENERATION TAB ----
-with tabs[4]:
+with tabs[5]:
     if st.button("🚀 Run Evaluations", key="evaluate"):
         if not st.session_state.solutions:
             st.warning("Please generate solutions first!")
