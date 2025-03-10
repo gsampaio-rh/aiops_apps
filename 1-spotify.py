@@ -109,64 +109,65 @@ if uploaded_file:
 
     # User Summary
     def user_summary(user_id):
-        user_playlists = df[df["user_id"] == user_id]["playlistname"].value_counts()
-        user_artists = df[df["user_id"] == user_id]["artistname"].value_counts()
+        with st.spinner(f"🔍 Loading user profile for {user_id}..."):
+            user_playlists = df[df["user_id"] == user_id]["playlistname"].value_counts()
+            user_artists = df[df["user_id"] == user_id]["artistname"].value_counts()
 
-        st.subheader(f"👤 User Profile: {user_id}")
+            st.subheader(f"👤 User Profile: {user_id}")
 
-        # 🎵 Playlists Section with Dropdown
-        with st.expander("📂 Playlists"):
-            if user_playlists.empty:
-                st.info("No playlists found for this user.")
-            else:
-                cols = st.columns(min(8, len(user_playlists)))  # Responsive grid
-                for idx, (playlist, count) in enumerate(user_playlists.items()):
-                    with cols[idx % len(cols)]:
-                        st.markdown(
-                            f"""
-                            <div style="
-                                border-radius: 10px;
-                                padding: 10px;
-                                margin: 10px;
-                                background: linear-gradient(135deg, #ff758c, #ff7eb3);
-                                box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.1);
-                                text-align: center;
-                                font-size: 14px;
-                                transition: transform 0.2s ease-in-out;
-                            ">
-                            <h4 style="color: white; margin: 5px;">📁 {playlist}</h4>
-                            <p style="color: white; margin: 2px;">{count} tracks</p>
-                            </div>
-                            """,
-                            unsafe_allow_html=True,
-                        )
+            # 🎵 Playlists Section with Dropdown
+            with st.expander("📂 Playlists"):
+                if user_playlists.empty:
+                    st.info("No playlists found for this user.")
+                else:
+                    cols = st.columns(min(8, len(user_playlists)))  # Responsive grid
+                    for idx, (playlist, count) in enumerate(user_playlists.items()):
+                        with cols[idx % len(cols)]:
+                            st.markdown(
+                                f"""
+                                <div style="
+                                    border-radius: 10px;
+                                    padding: 10px;
+                                    margin: 10px;
+                                    background: linear-gradient(135deg, #ff758c, #ff7eb3);
+                                    box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.1);
+                                    text-align: center;
+                                    font-size: 14px;
+                                    transition: transform 0.2s ease-in-out;
+                                ">
+                                <h4 style="color: white; margin: 5px;">📁 {playlist}</h4>
+                                <p style="color: white; margin: 2px;">{count} tracks</p>
+                                </div>
+                                """,
+                                unsafe_allow_html=True,
+                            )
 
-        # 🎤 Favorite Artists Section with Dropdown
-        with st.expander("🎤 Favorite Artists"):
-            if user_artists.empty:
-                st.info("No favorite artists found for this user.")
-            else:
-                cols = st.columns(min(8, len(user_artists)))  # More compact layout
-                for idx, (artist, count) in enumerate(user_artists.items()):
-                    with cols[idx % len(cols)]:
-                        st.markdown(
-                            f"""
-                            <div style="
-                                border-radius: 10px;
-                                padding: 10px;
-                                margin: 10px;
-                                background: linear-gradient(135deg, #a18cd1, #fbc2eb);
-                                box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.1);
-                                text-align: center;
-                                font-size: 14px;
-                                transition: transform 0.2s ease-in-out;
-                            ">
-                            <h4 style="color: white; margin: 5px;">🎵 {artist}</h4>
-                            <p style="color: white; margin: 2px;">{count} tracks</p>
-                            </div>
-                            """,
-                            unsafe_allow_html=True,
-                        )
+            # 🎤 Favorite Artists Section with Dropdown
+            with st.expander("🎤 Favorite Artists"):
+                if user_artists.empty:
+                    st.info("No favorite artists found for this user.")
+                else:
+                    cols = st.columns(min(8, len(user_artists)))  # More compact layout
+                    for idx, (artist, count) in enumerate(user_artists.items()):
+                        with cols[idx % len(cols)]:
+                            st.markdown(
+                                f"""
+                                <div style="
+                                    border-radius: 10px;
+                                    padding: 10px;
+                                    margin: 10px;
+                                    background: linear-gradient(135deg, #a18cd1, #fbc2eb);
+                                    box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.1);
+                                    text-align: center;
+                                    font-size: 14px;
+                                    transition: transform 0.2s ease-in-out;
+                                ">
+                                <h4 style="color: white; margin: 5px;">🎵 {artist}</h4>
+                                <p style="color: white; margin: 2px;">{count} tracks</p>
+                                </div>
+                                """,
+                                unsafe_allow_html=True,
+                            )
 
     # User Input for Recommendation
     st.subheader("🎧 Get Personalized Artist Recommendations")
@@ -175,20 +176,14 @@ if uploaded_file:
         user_summary(selected_user)
 
     # Collaborative Filtering Preparation
-    user_artist_matrix = df.pivot_table(
-        index="user_id", columns="artistname", aggfunc="size", fill_value=0
-    )
-    user_playlist_matrix = df.pivot_table(
-        index="user_id", columns="playlistname", aggfunc="size", fill_value=0
-    )
-    user_artist_sparse = csr_matrix(user_artist_matrix.values)
-    user_playlist_sparse = csr_matrix(user_playlist_matrix.values)
-    user_artist_similarity = cosine_similarity(user_artist_sparse)
-    similarity_df = pd.DataFrame(
-        user_artist_similarity,
-        index=user_artist_matrix.index,
-        columns=user_artist_matrix.index,
-    )
+    st.subheader("🌐 Building User Similarity Matrix...")
+    with st.spinner("📊 Calculating user similarity scores... Please wait!"):
+        user_artist_matrix = df.pivot_table(index="user_id", columns="artistname", aggfunc="size", fill_value=0)
+        user_artist_sparse = csr_matrix(user_artist_matrix.values)
+        similarity_matrix = cosine_similarity(user_artist_sparse)
+        similarity_df = pd.DataFrame(similarity_matrix, index=user_artist_matrix.index, columns=user_artist_matrix.index)
+
+    st.success("✅ User similarity matrix ready!")
 
     # 📌 Heatmap of Similarity
     st.subheader("🌐 Matchmaking Network")
@@ -300,7 +295,7 @@ if uploaded_file:
 
             # Display the grid with styled icons
             st.dataframe(grid_df.style.set_properties(**{"text-align": "center"}))
-            
+
     with st.expander("🔥 View User Similarity Heatmap"):
         # Select top 10 most similar users
         similar_users = (
@@ -419,99 +414,104 @@ if uploaded_file:
     # --- Streamlit App: Fast Artist Clustering Based on Playlist Co-occurrence ---
     st.subheader("🎨 Artist Clustering Based on Playlist Co-occurrence")
 
-    with st.spinner("Building artist co-occurrence matrix quickly..."):
+    with st.spinner("⏳ Building artist co-occurrence matrix..."):
         artist_cooccurrence = build_artist_cooccurrence_fast(df)
-    st.success("Co-occurrence matrix built successfully!")
+    st.success("✅ Artist co-occurrence matrix built successfully!")
 
     # Normalize the co-occurrence matrix
-    scaler = StandardScaler()
-    artist_cooccurrence_scaled = scaler.fit_transform(artist_cooccurrence)
-    artist_cooccurrence_scaled_df = pd.DataFrame(
-        artist_cooccurrence_scaled,
-        index=artist_cooccurrence.index,
-        columns=artist_cooccurrence.columns,
-    )
-
-    # Dimensionality Reduction using Truncated SVD
-    svd = TruncatedSVD(n_components=2, random_state=42)
-    artist_reduced = svd.fit_transform(artist_cooccurrence_scaled_df)
-    artist_reduced_df = pd.DataFrame(
-        artist_reduced,
-        index=artist_cooccurrence.index,
-        columns=["Component 1", "Component 2"],
-    )
-
-    with st.expander("Artist vs. Playlists Matrix"):
-        # Define sliders to let the user choose how many top playlists and artists to display
-        top_n_playlists = st.slider("Select Top N Playlists", min_value=1, max_value=50, value=10, key="playlist_slider")
-        top_n_artists = st.slider(
-            "Select Top N Artists",
-            min_value=1,
-            max_value=50,
-            value=10,
-            key="artists_slider",
+    with st.spinner("⏳ Running SVD for dimensionality reduction..."):
+        scaler = StandardScaler()
+        artist_cooccurrence_scaled = scaler.fit_transform(artist_cooccurrence)
+        artist_cooccurrence_scaled_df = pd.DataFrame(
+            artist_cooccurrence_scaled,
+            index=artist_cooccurrence.index,
+            columns=artist_cooccurrence.columns,
         )
 
-        # Create the artist-playlist matrix (binary presence)
-        artist_playlist = df[["artistname", "playlistname"]].drop_duplicates()
-        artist_playlist_matrix = pd.crosstab(artist_playlist["artistname"], artist_playlist["playlistname"])
+        # Dimensionality Reduction using Truncated SVD
+        svd = TruncatedSVD(n_components=2, random_state=42)
+        artist_reduced = svd.fit_transform(artist_cooccurrence_scaled_df)
+        artist_reduced_df = pd.DataFrame(
+            artist_reduced,
+            index=artist_cooccurrence.index,
+            columns=["Component 1", "Component 2"],
+        )
 
-        # Get top playlists and artists based on their frequency in the original DataFrame
-        top_playlists = df["playlistname"].value_counts().head(top_n_playlists).index
-        top_artists = df["artistname"].value_counts().head(top_n_artists).index
+        with st.expander("Artist vs. Playlists Matrix"):
+            # Define sliders to let the user choose how many top playlists and artists to display
+            top_n_playlists = st.slider("Select Top N Playlists", min_value=1, max_value=50, value=10, key="playlist_slider")
+            top_n_artists = st.slider(
+                "Select Top N Artists",
+                min_value=1,
+                max_value=50,
+                value=10,
+                key="artists_slider",
+            )
 
-        # Filter the matrix for only these top playlists and artists
-        filtered_matrix = artist_playlist_matrix.loc[
-            artist_playlist_matrix.index.isin(top_artists),
-            artist_playlist_matrix.columns.isin(top_playlists)
-        ]
+            # Create the artist-playlist matrix (binary presence)
+            artist_playlist = df[["artistname", "playlistname"]].drop_duplicates()
+            artist_playlist_matrix = pd.crosstab(artist_playlist["artistname"], artist_playlist["playlistname"])
 
-        st.dataframe(filtered_matrix)
+            # Get top playlists and artists based on their frequency in the original DataFrame
+            top_playlists = df["playlistname"].value_counts().head(top_n_playlists).index
+            top_artists = df["artistname"].value_counts().head(top_n_artists).index
 
-    with st.expander("🔢 Artist Embedding DataFrame"):
-        st.dataframe(artist_reduced_df)
+            # Filter the matrix for only these top playlists and artists
+            filtered_matrix = artist_playlist_matrix.loc[
+                artist_playlist_matrix.index.isin(top_artists),
+                artist_playlist_matrix.columns.isin(top_playlists)
+            ]
+
+            st.dataframe(filtered_matrix)
+
+        with st.expander("🔢 Artist Embedding DataFrame"):
+            st.dataframe(artist_reduced_df)
+    st.success("✅ Dimensionality reduction completed!")
 
     # Cluster Artists with K-Means
-    optimal_k = st.slider("Select Number of Clusters", min_value=2, max_value=20, value=10)
-    kmeans = KMeans(n_clusters=optimal_k, random_state=42, n_init=10)
-    clusters = kmeans.fit_predict(artist_reduced_df)
-    artist_reduced_df["cluster"] = clusters
-    # Add a dedicated column for artist names (if not already present)
-    artist_reduced_df["artist"] = artist_reduced_df.index
+    with st.spinner("🌀 Running K-Means Clustering..."):
+        optimal_k = st.slider("Select Number of Clusters", min_value=2, max_value=20, value=10)
+        kmeans = KMeans(n_clusters=optimal_k, random_state=42, n_init=10)
+        clusters = kmeans.fit_predict(artist_reduced_df)
+        artist_reduced_df["cluster"] = clusters
+        # Add a dedicated column for artist names (if not already present)
+        artist_reduced_df["artist"] = artist_reduced_df.index
 
-    # Compute and Display Silhouette Score
-    sil_score = silhouette_score(
-        artist_reduced_df[["Component 1", "Component 2"]], clusters
-    )
-    st.subheader(f"⭐ Silhouette Score: {sil_score:.2f}")
+        # Compute and Display Silhouette Score
+        sil_score = silhouette_score(
+            artist_reduced_df[["Component 1", "Component 2"]], clusters
+        )
+        st.subheader(f"⭐ Silhouette Score: {sil_score:.2f}")
 
-    # Visualize the Clusters using Plotly
-    fig = px.scatter(
-        artist_reduced_df,
-        x="Component 1",
-        y="Component 2",
-        color=artist_reduced_df["cluster"].astype(str),
-        title="Artist Clusters Based on Playlist Co-occurrence",
-        labels={"cluster": "Cluster"},
-        hover_name="artist",  # Show artist name on hover
-        hover_data={"Component 1": True, "Component 2": True},
-    )
-    st.plotly_chart(fig)
+        # Visualize the Clusters using Plotly
+        fig = px.scatter(
+            artist_reduced_df,
+            x="Component 1",
+            y="Component 2",
+            color=artist_reduced_df["cluster"].astype(str),
+            title="Artist Clusters Based on Playlist Co-occurrence",
+            labels={"cluster": "Cluster"},
+            hover_name="artist",  # Show artist name on hover
+            hover_data={"Component 1": True, "Component 2": True},
+        )
+        st.plotly_chart(fig)
+    st.success(f"✅ Clustering completed! {optimal_k} clusters created.")
 
     # Allow users to select an artist to see similar artists in the same cluster
     selected_artist = st.selectbox(
         "Select an Artist for Cluster-Based Recommendations", artist_reduced_df.index
     )
     if selected_artist:
-        if selected_artist in artist_reduced_df.index:
-            selected_cluster = artist_reduced_df.loc[selected_artist, "cluster"]
-            similar_artists = artist_reduced_df[
-                artist_reduced_df["cluster"] == selected_cluster
-            ].index.tolist()
-            st.write(
-                f"🧑‍🎤👩‍🎤 Artists in the same cluster as {selected_artist}: {similar_artists}"
-            )
-        else:
-            st.error(
-                f"Artist {selected_artist} not found in clustering results. Please select another artist."
-            )
+        with st.spinner(f"🔍 Finding similar artists to {selected_artist}..."):
+            if selected_artist in artist_reduced_df.index:
+                selected_cluster = artist_reduced_df.loc[selected_artist, "cluster"]
+                similar_artists = artist_reduced_df[
+                    artist_reduced_df["cluster"] == selected_cluster
+                ].index.tolist()
+                st.write(
+                    f"🧑‍🎤👩‍🎤 Artists in the same cluster as {selected_artist}: {similar_artists}"
+                )
+            else:
+                st.error(
+                    f"Artist {selected_artist} not found in clustering results. Please select another artist."
+                )
