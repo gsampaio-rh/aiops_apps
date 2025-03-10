@@ -9,6 +9,7 @@ import ast
 import matplotlib.pyplot as plt
 import requests
 from langchain.llms import Ollama
+import pandas as pd
 
 # ---- TEST CASES ----
 TEST_CASES = [
@@ -69,7 +70,7 @@ def evaluate_solution(solution_code, array, expected_output, action):
     """Runs and evaluates the AI-generated solution and updates Q-table."""
     if not solution_code:
         update_q_table(tuple(array), action, -10)  # Penalize missing solutions
-        return -10
+        return {"reward": -10, "execution_time": "N/A", "memory_usage": "N/A"}
 
     try:
         local_scope = {}
@@ -106,11 +107,20 @@ def evaluate_solution(solution_code, array, expected_output, action):
         # Update Q-table with the new reward
         update_q_table(tuple(array), action, reward)
 
-        return reward
+        return {
+            "reward": reward,
+            "execution_time": execution_time,
+            "memory_usage": peak / 1024,  # Convert to KB
+        }
 
     except Exception as e:
         update_q_table(tuple(array), action, -10)  # Penalize errors
-        return -10
+        return {
+            "reward": -10,
+            "execution_time": "Error",
+            "memory_usage": "Error",
+            "error": str(e),
+        }
 
 
 def select_best_strategy(test_case):
@@ -206,7 +216,15 @@ selected_test_cases = TEST_CASES[:num_scenarios]
 
 # ---- TABBED LAYOUT ----
 tabs = st.tabs(
-    ["Context", "Strategies", "Tests", "Reward", "Generate Code", "Evaluate"]
+    [
+        "Context",
+        "Strategies",
+        "Tests",
+        "Reward",
+        "Generate Code",
+        "Evaluate",
+        "Q-Table ",
+    ]
 )
 
 # ---- CONTEXT TAB ----
@@ -353,80 +371,160 @@ with tabs[4]:
         st.markdown("### 📝 AI-Generated Solutions")
         st.session_state.solutions = generate_solutions()
 
-# ---- CODE GENERATION TAB ----
+## ---- RUN EVALUATION TAB ----
+# ---- RUN EVALUATION TAB ----
 with tabs[5]:
-    if st.button("🚀 Run Evaluations", key="evaluate"):
+    st.markdown("## 🚀 AI Model Evaluation")
+
+    # Run Evaluations Button
+    if st.button(
+        "🎯 Run Evaluations",
+        key="evaluate",
+        help="Click to evaluate AI-generated strategies",
+    ):
+
         if not st.session_state.solutions:
-            st.warning("Please generate solutions first!")
+            st.warning("⚠️ Please generate solutions first!")
         else:
-            st.markdown("### 🔄 AI Learning Process")
+            st.success("🔄 Evaluation in progress... Please wait.")
+
             rewards = {
                 action: [] for action in selected_actions
-            }  # Use only selected strategies
+            }  # Store rewards per strategy
+            evaluation_summary = (
+                []
+            )  # Store evaluation results for displaying in a DataFrame
 
-            for i, (array, expected_output) in enumerate(
-                selected_test_cases
-            ):  # Use only selected test cases
+            progress_bar = st.progress(0)  # Add a progress bar for better feedback
+            total_tests = len(selected_test_cases) * len(selected_actions)
+            progress_step = 1 / total_tests
+
+            for i, (array, expected_output) in enumerate(selected_test_cases):
                 with st.expander(f"🧪 Test Case {i+1}: `{array}`"):
-                    st.markdown(f"✅ Expected Output: `{expected_output}`")
+                    st.markdown(f"✅ **Expected Output:** `{expected_output}`")
 
                     for action, solution_code in st.session_state.solutions.items():
                         if not solution_code:
                             st.markdown(f"❌ No solution generated for `{action}`.")
                             continue
 
-                        reward = evaluate_solution(
+                        evaluation_results = evaluate_solution(
                             solution_code, array, expected_output, action
-                        )  # ✅ CALLING evaluate_solution()
+                        )
 
-                        # Store reward
-                        rewards[action].append(reward)
+                        reward = evaluation_results["reward"]
+                        execution_time = evaluation_results["execution_time"]
+                        memory_usage = evaluation_results["memory_usage"]
 
-                        # Display the evaluation results
+                        # Color-coded indicators
+                        accuracy_status = "🟢 Correct" if reward > 0 else "🔴 Incorrect"
+
+                        # Display results in a card-style format for clarity
                         st.markdown(
                             f"""
-                            **🛠 Strategy:** `{action}`
-                            ✅ **Accuracy:** `{1.0 if reward > 0 else 0:.2f}`
-                            ⏱ **Execution Time:** `Check Q-table`
-                            💾 **Memory Used:** `Check Q-table`
-                            🏅 **Reward:** `{reward:.2f}`
+                            <div style="
+                                padding: 10px; 
+                                border-radius: 8px; 
+                                background-color: #f8f9fa; 
+                                box-shadow: 2px 2px 5px rgba(0,0,0,0.1); 
+                                margin-bottom: 10px;">
+                                <b>🛠 Strategy:</b> {action}<br>
+                                {accuracy_status}<br>
+                                ⏱ <b>Execution Time:</b> {execution_time if execution_time == 'Error' else f"{float(execution_time):.6f}"} sec<br>
+                                💾 <b>Memory Used:</b> {memory_usage if memory_usage == 'Error' else f"{float(memory_usage):.2f}"} KB<br>
+                                🏅 <b>Reward:</b> {reward if reward == 'Error' else f"{float(reward):.2f}"}
+                            </div>
                             """,
                             unsafe_allow_html=True,
                         )
 
-                        time.sleep(0.5)
+                        # Store for summary table
+                        evaluation_summary.append(
+                            {
+                                "Test Case": i + 1,
+                                "Strategy": action,
+                                "Accuracy": "Correct" if reward > 0 else "Incorrect",
+                                "Execution Time (sec)": execution_time,
+                                "Memory Usage (KB)": memory_usage,
+                                "Reward": reward,
+                            }
+                        )
 
-        # ---- PLOT PERFORMANCE ----
-        fig, ax = plt.subplots()
-        for action, reward_values in rewards.items():
-            ax.plot(
-                range(1, len(selected_test_cases) + 1),
-                reward_values,
-                marker="o",
-                linestyle="-",
-                label=action,
+                        # Store reward data
+                        rewards[action].append(reward)
+
+                        # Update progress bar
+                        progress_bar.progress(
+                            min(
+                                (
+                                    progress_step
+                                    * (
+                                        i * len(selected_actions)
+                                        + list(st.session_state.solutions.keys()).index(
+                                            action
+                                        )
+                                        + 1
+                                    )
+                                ),
+                                1.0,
+                            )
+                        )
+
+                        time.sleep(0.5)  # Prevent UI freeze
+
+            # Close progress bar
+            progress_bar.empty()
+
+            summary_df = pd.DataFrame(evaluation_summary)
+
+            st.dataframe(summary_df)  # Streamlit's built-in dataframe display
+
+            # ---- PLOT PERFORMANCE ----
+            fig, ax = plt.subplots(figsize=(8, 5))
+            for action, reward_values in rewards.items():
+                ax.plot(
+                    range(1, len(selected_test_cases) + 1),
+                    reward_values,
+                    marker="o",
+                    linestyle="-",
+                    label=action,
+                )
+
+            ax.set_xlabel("Test Cases")
+            ax.set_ylabel("Reward Score")
+            ax.set_title("📊 AI Strategy Performance Across Test Cases")
+            ax.legend()
+            ax.grid()
+            st.pyplot(fig)
+
+            # ---- SELECT BEST STRATEGY ----
+            avg_rewards = {
+                action: np.mean(reward_values)
+                for action, reward_values in rewards.items()
+            }
+            best_strategy = max(avg_rewards, key=avg_rewards.get)
+
+            st.markdown(
+                f"""
+                <div style="
+                    padding: 15px; 
+                    border-radius: 8px; 
+                    background-color: #e3f2fd; 
+                    box-shadow: 2px 2px 5px rgba(0,0,0,0.1); 
+                    margin-top: 20px;">
+                    🎯 <b>Best Strategy Selected:</b> `{best_strategy}`<br>
+                    🏆 <b>Average Reward:</b> `{avg_rewards[best_strategy]:.2f}`
+                </div>
+                """,
+                unsafe_allow_html=True,
             )
 
-        ax.set_xlabel("Test Cases")
-        ax.set_ylabel("Reward Score")
-        ax.set_title("📊 AI Strategy Performance Across Test Cases")
-        ax.legend()
-        ax.grid()
-        st.pyplot(fig)
 
-        # ---- SELECT BEST STRATEGY ----
-        avg_rewards = {
-            action: np.mean(reward_values) for action, reward_values in rewards.items()
-        }
-        best_strategy = max(avg_rewards, key=avg_rewards.get)
-
-        st.markdown(f"## 🏆 Best Strategy Selected: `{best_strategy}`")
-        st.markdown(f"### 🎯 Average Reward: `{avg_rewards[best_strategy]:.2f}`")
-
-# with st.expander("📊 Q-Table (AI Learning Progress)", expanded=True):
-#     st.markdown("### 🔎 Reinforcement Learning Q-Table")
-#     for test_case, strategies in st.session_state.q_table.items():
-#         st.markdown(f"**Test Case:** `{test_case}`")
-#         for action, q_value in strategies.items():
-#             st.markdown(f"- **{action}** → Q-Value: `{q_value:.2f}`")
-#         st.markdown("---")  # Separator for readability
+with tabs[6]:
+    with st.expander("📊 Q-Table (AI Learning Progress)", expanded=True):
+        st.markdown("### 🔎 Reinforcement Learning Q-Table")
+        for test_case, strategies in st.session_state.q_table.items():
+            st.markdown(f"**Test Case:** `{test_case}`")
+            for action, q_value in strategies.items():
+                st.markdown(f"- **{action}** → Q-Value: `{q_value:.2f}`")
+            st.markdown("---")  # Separator for readability
