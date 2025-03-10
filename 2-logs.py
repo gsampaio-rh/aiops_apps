@@ -96,7 +96,12 @@ with tabs[0]:
         try:
             # Leitura do arquivo
             log_lines = uploaded_file.getvalue().decode("utf-8").splitlines()
+            full_log_text = "\n".join(log_lines)  # Convert list to string for display
             st.success("✅ Arquivo carregado com sucesso!")
+
+            # Expander to show full log file
+            with st.expander("📜 Visualizar Log Completo"):
+                st.text_area("Arquivo de Log", full_log_text, height=300)
 
             # Criação do DataFrame inicial
             df_logs = pd.DataFrame({"log_entry": log_lines})
