@@ -377,23 +377,27 @@ with tabs[4]:
                 total_logs = (
                     tfidf_vectorizer.transform(logs_pred["event_clean"]).shape[0] - 1
                 )
-                sample_index = st.slider(
-                    "Selecione o índice do log para predição",
-                    min_value=0,
-                    max_value=int(total_logs),
-                    value=0,
-                    step=1,
+                
+                # Prepare log options for selectbox (truncate for readability)
+                log_options = logs_pred["event_clean"].tolist()
+                truncated_options = [
+                    f"{i+1}. {log[:80]}..." for i, log in enumerate(log_options)
+                ]
+
+                # Selectbox for log selection
+                selected_log_index = st.selectbox(
+                    "📜 Selecione um log para predição:",
+                    options=range(len(log_options)),
+                    format_func=lambda i: truncated_options[i],
                 )
 
-                # Exibir o log selecionado
-                sample_log = logs_pred["event_clean"].iloc[sample_index]
-                st.markdown("**Log Selecionado:**")
-                st.code(sample_log, language="bash")
+                # Display selected log
+                selected_log = log_options[selected_log_index]
 
                 # Compute the vector for the selected log using the stored vectorizer
                 with st.spinner("Realizando previsão..."):
                     time.sleep(1)  # Simulate processing delay
-                    sample_vector = tfidf_vectorizer.transform([sample_log])
+                    sample_vector = tfidf_vectorizer.transform([selected_log])
                     log_model = st.session_state["log_model"]
                     predicted_label = log_model.predict(sample_vector)
                     predicted_event = st.session_state[
