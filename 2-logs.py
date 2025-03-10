@@ -241,24 +241,104 @@ with tabs[2]:
 
 with tabs[3]:
     st.header("Training Loss & Accuracy Monitoring")
-    with st.expander("Visualizar Fluxo do Pipeline"):
-        pipeline_diagram = """
-        digraph {
-            rankdir=LR;
-            node [shape=box, style=filled, color="#EFEFEF", fontname="Helvetica"];
-            A [label="Upload de Logs"];
-            B [label="Parsing e Pré-processamento"];
-            C [label="Visualização de Tendências\n& Anomalias"];
-            D [label="Modelagem ML\n(Logistic Regression)"];
-            E [label="Predição do Próximo Evento"];
 
-            A -> B -> C;
-            B -> D -> E;
-        }
-        """
-        st.graphviz_chart(pipeline_diagram)
+    # with st.expander("Visualizar Fluxo do Pipeline"):
+    #     pipeline_diagram = """
+    #     digraph {
+    #         rankdir=LR;
+    #         node [shape=box, style=filled, color="#EFEFEF", fontname="Helvetica"];
+    #         A [label="Upload de Logs"];
+    #         B [label="Parsing e Pré-processamento"];
+    #         C [label="Visualização de Tendências\n& Anomalias"];
+    #         D [label="Modelagem ML\n(Logistic Regression)"];
+    #         E [label="Predição do Próximo Evento"];
+
+    #         A -> B -> C;
+    #         B -> D -> E;
+    #     }
+    #     """
+    #     st.graphviz_chart(pipeline_diagram)
 
     if "parsed_logs" in st.session_state:
+        # Explain Training Process Step-by-Step
+        st.markdown("### 🔍 How Does Model Training Work?")
+
+        st.write(
+            "We are training a **Logistic Regression Model** to recognize patterns in logs and predict future events. "
+            "This involves:"
+        )
+        # ---- EXPANDERS ----
+        with st.expander("📊 Step 1: Converting Logs into Numerical Vectors"):
+            st.code(
+                """
+                # Convert text logs into numerical features using TF-IDF
+                # ngram_range=(1,2) means it considers single words and two-word combinations
+                tfidf_vectorizer_train = TfidfVectorizer(analyzer="word", ngram_range=(1, 2))
+
+                # Apply TF-IDF to the event logs
+                # Turns text like ["user login", "purchase item"] into a matrix of numbers
+                X_tfidf_all = tfidf_vectorizer_train.fit_transform(logs_pred["event_clean"].tolist())
+                """,
+                language="python",
+            )
+
+        with st.expander("🔖 Step 2: Assigning Labels to Events"):
+            st.code(
+                """
+                # Convert categorical event labels into numerical values
+                # Example:
+                # logs_pred["event_clean"] = ["click", "view", "purchase", "click", "view"]
+                # After encoding: y_all = [0, 1, 2, 0, 1]
+                label_encoder_train = LabelEncoder()
+                y_all = label_encoder_train.fit_transform(logs_pred["event_clean"])
+                """,
+                language="python",
+            )
+
+        with st.expander("🎯 Step 3: Splitting Data for Training"):
+            st.code(
+                """
+                # Split the data into training and test sets
+                # 80% training, 20% testing (test_size=0.2)
+                # random_state=42 ensures the split is reproducible
+                X_train, X_test, y_train, y_test = train_test_split(X_tfidf_all, y_all, test_size=0.2, random_state=42)
+                """,
+                language="python",
+            )
+
+        with st.expander("🚀 Step 4: Training the Model in Real-Time"):
+            st.code(
+                """
+                # Initialize Model
+                num_iterations = 50
+                losses, accuracies = [], []
+
+                log_model = LogisticRegression(max_iter=1, multi_class="multinomial", solver="lbfgs", warm_start=True)
+                
+                # Train in multiple steps and record loss & accuracy
+                for i in range(num_iterations):
+                    log_model.fit(X_train, y_train)  # Train for one iteration
+                    y_pred_proba = log_model.predict_proba(X_train)
+                    y_train_pred = log_model.predict(X_train)
+
+                    loss = log_loss(y_train, y_pred_proba)
+                    accuracy = accuracy_score(y_train, y_train_pred)
+
+                    losses.append(loss)
+                    accuracies.append(accuracy)
+
+                    progress_text.text(
+                        f"Iteration {i+1}/{num_iterations}: Log Loss = {loss:.4f}, Accuracy = {accuracy:.2%}"
+                    )
+                    progress_bar.progress((i + 1) / num_iterations)
+
+                # Evaluate the final model on test data
+                y_test_pred = log_model.predict(X_test)
+                final_accuracy = accuracy_score(y_test, y_test_pred)
+                """,
+                language="python",
+            )
+
         # Prepare the data from parsed logs
         logs_pred = st.session_state["parsed_logs"].dropna(subset=["event"]).copy()
         logs_pred["event_clean"] = logs_pred["event"].apply(clean_log_entry)
