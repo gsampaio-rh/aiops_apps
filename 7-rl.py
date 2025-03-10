@@ -34,34 +34,34 @@ actions = [
 def generate_solutions():
     """Streams AI solutions for selected strategies."""
     solutions = {}
+    with st.spinner(f"🔄 Generating code functions..."):
+        for action in selected_actions:  # Use only user-selected strategies
+            with st.expander(f"✨ Strategy: {action}"):
+                
+                    placeholder = st.empty()
 
-    for action in selected_actions:  # Use only user-selected strategies
-        with st.expander(f"✨ Strategy: {action}"):
-            with st.spinner(f"🔄 Generating solution for **{action}**..."):
-                placeholder = st.empty()
+                    prompt = f"""
+                    Write a Python function named `second_largest` that finds the second largest distinct element in an array.
+                    Use this approach: {action}. Ensure the function handles edge cases properly.
+                    Only return the function implementation, no explanations or test cases.
+                    """
 
-                prompt = f"""
-                Write a Python function named `second_largest` that finds the second largest distinct element in an array.
-                Use this approach: {action}. Ensure the function handles edge cases properly.
-                Only return the function implementation, no explanations or test cases.
-                """
+                    # Stream response
+                    response = ""
+                    for chunk in llm.stream(prompt):  # Streaming the response
+                        response += chunk
+                        placeholder.markdown(
+                            f"```python\n{response}\n```"
+                        )  # Update UI in real-time
 
-                # Stream response
-                response = ""
-                for chunk in llm.stream(prompt):  # Streaming the response
-                    response += chunk
-                    placeholder.markdown(
-                        f"```python\n{response}\n```"
-                    )  # Update UI in real-time
+                    # Extract and finalize the function code
+                    match = re.search(r"```python\n(.*?)```", response, re.DOTALL)
+                    solutions[action] = (
+                        match.group(1).strip() if match else response.strip()
+                    )
 
-                # Extract and finalize the function code
-                match = re.search(r"```python\n(.*?)```", response, re.DOTALL)
-                solutions[action] = (
-                    match.group(1).strip() if match else response.strip()
-                )
-
-                # Replace placeholder with final code block
-                placeholder.code(solutions[action], language="python")
+                    # Replace placeholder with final code block
+                    placeholder.code(solutions[action], language="python")
 
     return solutions
 
