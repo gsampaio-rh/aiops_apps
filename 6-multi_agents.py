@@ -10,6 +10,16 @@ from langgraph.graph import StateGraph, MessagesState, START, END
 from langgraph.types import Command
 from langchain.schema import HumanMessage
 
+# Example color choices (pick whichever suits your design needs)
+AGENT_COLORS = {
+    "supervisor": "#d6eaf8",  # Light Blue
+    "log_analyzer": "#d1f2eb",  # Light Teal
+    "incident_monitor": "#fcf3cf",  # Light Yellow
+    "fix_suggester": "#f9ebea",  # Light Red/Pink
+    "action_executor": "#e8daef",  # Light Purple
+    "default": "#fff8e1",  # Fallback (Light Orange)
+}
+
 # ---- APP CONFIG ----
 st.set_page_config(page_title="Multi-Agent AI Supervisor", layout="wide")
 st.markdown(
@@ -150,18 +160,24 @@ builder.add_node("action_executor", action_executor_node)
 
 graph = builder.compile()
 
-
 # ---- INTERACTIVE CHAT UI ----
-def display_message(label, message, class_name):
-    """Improved UI message display with animations."""
+def display_message(label: str, message: str, bg_color: str) -> None:
+    """
+    Displays a message in the Streamlit UI with the specified background color.
+    """
     st.markdown(
         f"""
-        <div style='background: {class_name}; padding: 10px; border-radius: 8px; margin: 5px 0; font-family: monospace;'>
+        <div style='background: {bg_color}; 
+                    padding: 10px; 
+                    border-radius: 8px; 
+                    margin: 5px 0; 
+                    font-family: monospace;'>
             <b>{label}:</b><br>{message}
         </div>
         """,
         unsafe_allow_html=True,
     )
+
 
 with st.expander("🥸 Supervisor Prompt"):
     st.code(
@@ -198,16 +214,24 @@ if st.button("Run AI Supervisor"):
         try:
             for step in graph.stream({"messages": [HumanMessage(content=user_prompt)]}):
                 for agent, result in step.items():
-                    if agent == "supervisor" and result is not None:
+                    if result is None:
+                        # If there's no content, you can skip or display something else
+                        continue
+
+                    if agent == "supervisor":
+                        # Supervisor output is JSON
                         response_data = json.loads(result)
                         display_message(
                             "Supervisor Thought",
                             response_data.get("thought", "No thought provided"),
-                            "#d6eaf8",
+                            AGENT_COLORS["supervisor"],  # Unique color for supervisor
                         )
-                    elif agent != "supervisor":
+                    else:
+                        # Other agents: log_analyzer, incident_monitor, etc.
                         display_message(
-                            f"{agent.capitalize()} Output", result, "#fff8e1"
+                            f"{agent.capitalize()} Output",
+                            result,
+                            AGENT_COLORS.get(agent, AGENT_COLORS["default"]),
                         )
                 time.sleep(1)
         except Exception as e:
