@@ -180,7 +180,14 @@ with tabs[1]:
         with st.expander("📈 Top 10 Eventos Mais Recorrentes"):
             top_eventos = df_filtrado["event"].value_counts().head(10)
             fig2, ax2 = plt.subplots(figsize=(10, 5))
-            sns.barplot(x=top_eventos.values, y=top_eventos.index, palette="viridis", ax=ax2)
+            sns.barplot(
+                x=top_eventos.values,
+                y=top_eventos.index,
+                hue=top_eventos.index,
+                palette="viridis",
+                ax=ax2,
+                legend=False,
+            )
             ax2.set_xlabel("Frequência")
             ax2.set_ylabel("Evento")
             ax2.set_title("Top 10 Eventos")
@@ -393,9 +400,7 @@ with tabs[3]:
         num_iterations = 50  # Adjust as needed
 
         # Initialize the model with warm_start=True to retain progress
-        log_model = LogisticRegression(
-            max_iter=1, multi_class="multinomial", solver="lbfgs", warm_start=True
-        )
+        log_model = LogisticRegression(max_iter=1, solver="lbfgs", warm_start=True)
 
         st.markdown("### Training Progress")
         progress_text = st.empty()
@@ -447,7 +452,7 @@ with tabs[3]:
             )
             ax.set_xlabel("Iteration")
             ax.set_ylabel("Value")
-            ax.set_title("📉 Training Loss & Accuracy Over Iterations")
+            ax.set_title("Training Loss & Accuracy Over Iterations")
             ax.legend()
             ax.grid(True)
             st.pyplot(fig)
