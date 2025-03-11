@@ -494,13 +494,16 @@ with tabs[4]:
                     time.sleep(1)
                     sample_vector = tfidf_vectorizer.transform([selected_log])
                     log_model = st.session_state["log_model"]
-                    predicted_label = log_model.predict(sample_vector)
-                    predicted_event = st.session_state[
-                        "label_encoder_train"
-                    ].inverse_transform(predicted_label)[0]
+                    # predicted_label = log_model.predict(sample_vector)
+                    # predicted_event = st.session_state[
+                    #     "label_encoder_train"
+                    # ].inverse_transform(predicted_label)[0]
                     pred_prob = log_model.predict_proba(sample_vector)[0]
                     confidence = pred_prob.max()
+                    top_index = np.argmax(pred_prob)  # Get the index of the highest probability event
+                    predicted_event = st.session_state["label_encoder_train"].inverse_transform([top_index])[0]
 
+                    
                 col1, col2, col3 = st.columns([3, 1, 3])
 
                 with col1:
@@ -526,19 +529,19 @@ with tabs[4]:
                         "✅" if confidence > 0.75 else "⚠️" if confidence > 0.5 else "❌"
                     )
                     st.markdown(
-                        f"**Nível de Confiança:** :{confidence_color}[{confidence*100:.2f}%]"
+                        f"**Nível de Confiança:** {confidence_color} [{confidence*100:.2f}%]"
                     )
 
-                with st.expander("Ver Probabilidades de Previsão"):
-                    prob_df = pd.DataFrame(
-                        {
-                            "Evento": st.session_state[
-                                "label_encoder_train"
-                            ].inverse_transform(np.arange(len(pred_prob))),
-                            "Probabilidade": pred_prob,
-                        }
-                    ).sort_values("Probabilidade", ascending=False)
-                    st.dataframe(prob_df)
+                st.markdown("### 📊 Probabilidades de Previsão")
+                prob_df = pd.DataFrame(
+                    {
+                        "Evento": st.session_state[
+                            "label_encoder_train"
+                        ].inverse_transform(np.arange(len(pred_prob))),
+                        "Probabilidade": pred_prob,
+                    }
+                ).sort_values("Probabilidade", ascending=False)
+                st.dataframe(prob_df, use_container_width=True)
     else:
         st.info("Carregue os logs na etapa 1 para usar o módulo de predição.")
 
