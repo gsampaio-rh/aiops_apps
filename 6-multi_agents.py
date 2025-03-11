@@ -151,10 +151,15 @@ builder.add_node("action_executor", action_executor_node)
 graph = builder.compile()
 
 
+# ---- INTERACTIVE CHAT UI ----
 def display_message(label, message, class_name):
-    """Utility function to display formatted messages."""
+    """Improved UI message display with animations."""
     st.markdown(
-        f"<div class='{class_name}'><b>{label}:</b><br>{message}</div>",
+        f"""
+        <div style='background: {class_name}; padding: 10px; border-radius: 8px; margin: 5px 0; font-family: monospace;'>
+            <b>{label}:</b><br>{message}
+        </div>
+        """,
         unsafe_allow_html=True,
     )
 
@@ -188,14 +193,6 @@ user_prompt = st.text_area(
     "📝 Describe your issue:", "Nginx service is failing intermittently."
 )
 
-def display_message(label, message, class_name):
-    """Utility function to display formatted messages."""
-    if message is not None:
-        st.markdown(
-            f"<div class='{class_name}'><b>{label}:</b><br>{message}</div>",
-            unsafe_allow_html=True,
-        )
-
 if st.button("Run AI Supervisor"):
     with st.spinner("🤖 AI Agents Collaborating..."):
         try:
@@ -206,17 +203,12 @@ if st.button("Run AI Supervisor"):
                         display_message(
                             "Supervisor Thought",
                             response_data.get("thought", "No thought provided"),
-                            "agent-thought",
-                        )
-                        display_message(
-                            "Supervisor Decision",
-                            response_data.get("next_step", "No decision made"),
-                            "supervisor-output",
+                            "#d6eaf8",
                         )
                     elif agent != "supervisor":
                         display_message(
-                            f"{agent.capitalize()} Output", result, "agent-observation"
+                            f"{agent.capitalize()} Output", result, "#fff8e1"
                         )
                 time.sleep(1)
         except Exception as e:
-            display_message("❌ Error Occurred", str(e), "error-message")
+            display_message("❌ Error Occurred", str(e), "#ffebee")
