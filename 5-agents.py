@@ -29,35 +29,89 @@ st.markdown(
 
 # ---- HEADER ----
 st.markdown(
-    "<h1 class='header'>AI-Powered Incident Management for DevOps</h1>",
+    "<h1 class='header'>AI-Powered Agents for Incident Management</h1>",
     unsafe_allow_html=True,
 )
 
 # ---- LLM SETUP ----
 llm = OllamaLLM(model="mistral")
 
-# ---- EXPANDERS ----
-st.markdown("### ℹ️ Understanding AI Troubleshooting")
+with st.expander("🤖 Agent Overview"):
+    st.image(
+        "https://github.com/gsampaio-rh/virt-llm-agents/blob/main/images/agent_modules_small.png?raw=true",
+        caption="Agent Overview",
+    )
+
+with st.expander("🤖 Agent Modules"):
+    st.image(
+        "https://github.com/gsampaio-rh/virt-llm-agents/blob/main/images/agent.png?raw=true",
+        caption="Agent Modules",
+    )
+
+with st.expander("🧠 How ReAct Works [Planning Module]"):
+
+    st.write(
+        "ReAct (Reasoning + Acting) is a framework where the AI agent iterates between thought, action, and observation."
+    )
+    st.image(
+        "https://github.com/gsampaio-rh/virt-llm-agents/blob/main/images/react-diagram.png?raw=true",
+        caption="ReAct Framework",
+    )
+    st.code(
+        """
+        ================================ Human Message =================================
+        What is 10+10?
+        ================================== Ai Message ==================================
+        {
+            "thought": "The problem requires a basic arithmetic operation, so I will use the 'basic_calculator' tool.",
+            "action": "basic_calculator",
+            "action_input": {
+                "num1": 10,
+                "num2": 10,
+                "operation": "add"
+            }
+        }
+        ================================ System Message ================================
+        The answer is: 20.
+        Calculated with basic_calculator.
+        ================================== Ai Message ==================================
+        {
+            "answer": "I have the answer: 20."
+        }
+        """
+    )
+
 with st.expander("🔧 View Tool Implementations"):
     st.code(
         """
-@tool
-def get_server_logs():
-    "Fetches recent server logs from a public API."
-    api_url = "https://raw.githubusercontent.com/elastic/examples/master/Common%20Data%20Formats/nginx_logs/nginx_logs"
-    response = requests.get(api_url)
-    return response.text[:500] if response.status_code == 200 else "Could not fetch server logs."
-    
-@tool
-def check_incidents():
-    "Fetches current infrastructure incidents from a public API."
-    api_url = "https://status.github.com/api/status.json"
-    response = requests.get(api_url)
-    return (
-        response.json()
-        if response.status_code == 200
-        else "Could not fetch incident data."
-    )
+        @tool
+        def get_server_logs():
+            "Fetches recent server logs from a public API."
+            api_url = "https://raw.githubusercontent.com/elastic/examples/master/Common%20Data%20Formats/nginx_logs/nginx_logs"
+            response = requests.get(api_url)
+            return response.text[:500] if response.status_code == 200 else "Could not fetch server logs."
+            
+        @tool
+        def check_incidents():
+            "Fetches current infrastructure incidents from a public API."
+            api_url = "https://status.github.com/api/status.json"
+            response = requests.get(api_url)
+            return (
+                response.json()
+                if response.status_code == 200
+                else "Could not fetch incident data."
+            )
+        
+        @tool
+        def suggest_fix():
+            "Suggests a fix based on recent log patterns."
+            return "Based on the logs, the issue appears to be a high error rate in Nginx. Recommended action: Restart the Nginx service."
+
+
+        @tool
+        def restart_service():
+            "Simulated action: Restarting Nginx service."
+            return "Nginx service restarted successfully. Monitoring for further issues."
         """,
         language="python",
     )
@@ -65,53 +119,14 @@ def check_incidents():
 with st.expander("🤖 Agent Configuration"):
     st.code(
         """
-from langchain.agents import initialize_agent, Tool
-
-agent = initialize_agent(
-    tools=tools,
-    llm=llm,
-    agent="zero-shot-react-description",
-    memory=memory,
-    verbose=True,
-)
+        from langchain import hub
+        from langchain.agents import AgentExecutor, create_react_agent
+        
+        prompt = hub.pull("hwchase17/react")  # Pulling a standard ReAct prompt
+        agent = create_react_agent(llm, tools, prompt)
+        agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True, return_intermediate_steps=True)
         """,
         language="python",
-    )
-
-with st.expander("🧠 How ReAct Works"):
-    st.write(
-        "ReAct (Reasoning + Acting) is a framework where the AI agent iterates between thought, action, and observation."
-    )
-    st.image(
-        "https://miro.medium.com/v2/resize:fit:1400/format:webp/1*JJ-sEMmE-ui-WcbhwOBmPw.png",
-        caption="ReAct Framework",
-    )
-    st.code(
-        """
-================================ Human Message =================================
-
-What is 10+10?
-================================== Ai Message ==================================
-
-{
-    "thought": "The problem requires a basic arithmetic operation, so I will use the 'basic_calculator' tool.",
-    "action": "basic_calculator",
-    "action_input": {
-        "num1": 10,
-        "num2": 10,
-        "operation": "add"
-    }
-}
-================================ System Message ================================
-
-The answer is: 20.
-Calculated with basic_calculator.
-================================== Ai Message ==================================
-
-{
-    "answer": "I have the answer: 20."
-}
-        """
     )
 
 with st.expander("📝 View AI Prompt"):
@@ -241,6 +256,10 @@ prompt = hub.pull("hwchase17/react")  # Pulling a standard ReAct prompt
 agent = create_react_agent(llm, tools, prompt)
 agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True, return_intermediate_steps=True)
 
+# ---- Header ----
+st.markdown(
+    "<h1 class='header'>Prompt the Agent with something...</h1>", unsafe_allow_html=True
+)
 # ---- USER INTERACTION ----
 user_prompt = st.text_area(
     "📝 Describe your issue (e.g., 'High CPU usage on server-42'):",
