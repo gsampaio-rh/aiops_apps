@@ -3,7 +3,7 @@ import time
 import json
 import networkx as nx
 import matplotlib.pyplot as plt
-from langchain.llms import Ollama
+from langchain_ollama import OllamaLLM
 from langchain.agents import initialize_agent, Tool
 from langchain.tools import tool
 from langchain.memory import ConversationBufferMemory
@@ -35,7 +35,7 @@ st.markdown(
 )
 
 # ---- LLM SETUP ----
-llm = Ollama(model="mistral")
+llm = OllamaLLM(model="mistral")
 memory = ConversationBufferMemory(memory_key="chat_history")
 
 # ---- EXPANDERS ----
