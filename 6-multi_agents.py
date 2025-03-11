@@ -135,23 +135,42 @@ supervisor_prompt = (
 def supervisor_node(state: MessagesState) -> Command[Literal[*members, "__end__"]]:
     user_message = state["messages"][-1].content  # Fix: Access content directly
 
+    # 🔥 Extract the full message history for context
+    conversation_history = "\n\n".join([msg.content for msg in state["messages"]])
+
     display_message(
         f"Input",
-        user_message,
+        user_message,  # Now includes history
         AGENT_COLORS.get("user_message", AGENT_COLORS["default"]),
     )
-    response = llm.invoke(supervisor_prompt + "\nUser Message: " + user_message)
-    # st.code(response)
+
+    # 🔥 Send the full conversation history to the Supervisor
+    response = llm.invoke(
+        supervisor_prompt + "\nConversation History:\n" + conversation_history
+    )
+
     try:
         response_json = json.loads(response)
         next_step = response_json.get("next_step", "FINISH")
+
+        # 🔥 Append Supervisor thought as a new message (so it's part of history)
+        state["messages"].append(
+            HumanMessage(content=f"Supervisor Thought: {response_json['thought']}")
+        )
+        state["messages"].append(HumanMessage(content=f"Next Step: {next_step}"))
+
+        with st.expander("Conversation History"):
+            st.markdown(f"{conversation_history}")
+
         display_message(
             f"Supervisor Output",
             response_json,
             AGENT_COLORS.get("supervisor", AGENT_COLORS["default"]),
         )
+
     except json.JSONDecodeError:
         next_step = "FINISH"
+
     return Command(goto=next_step if next_step in members else END)
 
 
