@@ -1,4 +1,5 @@
 import streamlit as st
+import re
 import time
 import json
 import requests
@@ -103,34 +104,46 @@ def restart_service():
 members = ["log_analyzer", "incident_monitor", "fix_suggester", "action_executor"]
 options = members + ["FINISH"]
 
-# ---- SUPERVISOR PROMPT ----
 supervisor_prompt = (
     "You are an AI-powered supervisor responsible for coordinating an automated incident response system. "
     "Your task is to assign troubleshooting steps to specialized agents based on the issue described. "
-    "Each agent has a specific role and must be selected sequentially. Return the next step in proper JSON format. "
-    "\n\nAgents Available:"
+    "Each agent has a specific role and must be selected sequentially. Return the next step in proper JSON format."
+    
+    "\n\n### **Agents Available**:"
     "\n- `log_analyzer`: Fetches server logs and identifies potential errors."
     "\n- `incident_monitor`: Checks system-wide incidents and service status."
     "\n- `fix_suggester`: Suggests possible fixes based on logs and incidents."
     "\n- `action_executor`: Executes the fix and verifies resolution."
-    "\n\n### Instructions:"
-    "\n1. Analyze the user message."
-    "\n2. Determine the most appropriate agent for the next action."
-    "\n3. Generate a 'thought' to explain the reasoning behind your selection."
-    "\n4. Return the agent selection and thought strictly in the following JSON format:"
-    "\n"
-    '{"thought": "reasoning", "next_step": "agent_name"}'
-    ""
-    "\nEnsure that the output is always a valid JSON structure, without extra formatting or characters outside the JSON block."
-    '\n5. If all steps are complete, return `{"thought": "The issue has been fully resolved.", "next_step": "FINISH"}`.'
-    "\n\n### Example Outputs:"
-    '\nUser reports: \'Server is down\' → `{"thought": "To diagnose the issue, fetching logs is the first step.", "next_step": "log_analyzer"}`'
-    '\nLogs show high CPU usage → `{"thought": "High CPU usage suggests a system-wide issue. Checking incidents.", "next_step": "incident_monitor"}`'
-    '\nIncident detected → `{"thought": "An incident has been identified. A fix should be suggested.", "next_step": "fix_suggester"}`'
-    '\nFix suggested → `{"thought": "A fix is available. Executing it now.", "next_step": "action_executor"}`'
-    '\nFix executed successfully → `{"thought": "The issue has been fully resolved.", "next_step": "FINISH"}`'
-)
+    
+    "\n\n### **Instructions**:"
+    "\n1. **Analyze the full conversation history**, not just the last user message."
+    "\n2. **If a step has already been executed, do not suggest it again.**"
+    "\n3. **If `action_executor` has already restarted a service, verify success before suggesting another action.**"
+    "\n4. **Once a fix has been executed, check if the issue is resolved instead of looping.**"
+    
+    "\n\n### **Loop Prevention Rules**:"
+    "\n- If `log_analyzer` has already provided logs, do not call it again unless new errors appear."
+    "\n- If `action_executor` has restarted Nginx, **only proceed if new issues arise**."
+    "\n- If `incident_monitor` shows all systems are operational, do not call it again."
+    "\n- If an issue has been resolved, **return**:"
+    '\n  `{"thought": "The issue has been fully resolved. No further action is needed.", "next_step": "FINISH"}`'
 
+    "\n\n### **STRICT JSON FORMAT REQUIREMENT**:"
+    "\n- Your output **must** be a valid JSON dictionary with two keys: `thought` and `next_step`."
+    "\n- **Ensure there are no extra characters, explanations, or formatting issues.**"
+    "\n- **Always wrap keys and values in double quotes (`\"`), NOT single quotes.**"
+    "\n- **DO NOT return any text outside of the JSON block.**"
+    
+    "\n\n### **VALID OUTPUT EXAMPLES**:"
+    '\n✅ Correct: `{"thought": "The logs indicate an issue with Nginx. Checking incidents next.", "next_step": "incident_monitor"}`'
+    '\n❌ Incorrect: `Thought: "The logs indicate an issue with Nginx. Checking incidents next." Next Step: incident_monitor`'
+    '\n❌ Incorrect: `{"thought": "Restarting the service might help.", next_step: action_executor}` (missing quotes)'
+    '\n❌ Incorrect: `Some text before {"thought": "Checking logs", "next_step": "log_analyzer"} more text after` (extra text before/after JSON)'
+
+    "\n\n### **FINAL CHECK BEFORE RETURNING**:"
+    "\n- If your output is NOT a valid JSON dictionary, **correct it before returning.**"
+    '\n- If unsure, reformat it using Python’s `json.dumps()` function.'
+)
 
 def supervisor_node(state: MessagesState) -> Command[Literal[*members, "__end__"]]:
     user_message = state["messages"][-1].content  # Fix: Access content directly
@@ -149,8 +162,26 @@ def supervisor_node(state: MessagesState) -> Command[Literal[*members, "__end__"
         supervisor_prompt + "\nConversation History:\n" + conversation_history
     )
 
+    # 🔥 Step 1: Clean LLM response
+    response_cleaned = response.strip()
+
+    # 🔥 Step 2: Remove **single backticks** if they exist at the start or end
+    response_cleaned = re.sub(r"^`|`$", "", response_cleaned)  # Removes ONE leading/trailing backtick
+
+    # 🔥 Step 3: Fix smart quotes (if they exist)
+    response_cleaned = response_cleaned.replace("“", '"').replace("”", '"')
+
+    st.code(f"{response_cleaned}")
+
     try:
-        response_json = json.loads(response)
+
+        # 🔥 Step 4: Parse JSON safely
+        response_json = json.loads(response_cleaned) # Ensure valid JSON
+
+        # 🔥 Validate JSON structure (must contain `thought` and `next_step`)
+        if not isinstance(response_json, dict) or "thought" not in response_json or "next_step" not in response_json:
+            raise ValueError("Invalid JSON format received.")
+
         next_step = response_json.get("next_step", "FINISH")
 
         # 🔥 Append Supervisor thought as a new message (so it's part of history)
