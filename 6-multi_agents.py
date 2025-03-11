@@ -48,6 +48,25 @@ st.markdown(
 llm = OllamaLLM(model="mistral")
 
 
+# ---- INTERACTIVE CHAT UI ----
+def display_message(label: str, message: str, bg_color: str) -> None:
+    """
+    Displays a message in the Streamlit UI with the specified background color.
+    """
+    st.markdown(
+        f"""
+        <div style='background: {bg_color}; 
+                    padding: 10px; 
+                    border-radius: 8px; 
+                    margin: 5px 0; 
+                    font-family: monospace;'>
+            <b>{label}:</b><br>{message}
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 # ---- TOOL FUNCTIONS ----
 def get_server_logs():
     """Fetches recent server logs."""
@@ -114,12 +133,17 @@ supervisor_prompt = (
 
 def supervisor_node(state: MessagesState) -> Command[Literal[*members, "__end__"]]:
     user_message = state["messages"][-1].content  # Fix: Access content directly
-    st.write(user_message)
+    # st.write(user_message)
     response = llm.invoke(supervisor_prompt + "\nUser Message: " + user_message)
-    st.code(response)
+    # st.code(response)
     try:
         response_json = json.loads(response)
         next_step = response_json.get("next_step", "FINISH")
+        display_message(
+            f"Supervisor Output",
+            response_json,
+            AGENT_COLORS.get("supervisor", AGENT_COLORS["default"]),
+        )
     except json.JSONDecodeError:
         next_step = "FINISH"
     return Command(goto=next_step if next_step in members else END)
@@ -159,24 +183,6 @@ builder.add_node("fix_suggester", fix_suggester_node)
 builder.add_node("action_executor", action_executor_node)
 
 graph = builder.compile()
-
-# ---- INTERACTIVE CHAT UI ----
-def display_message(label: str, message: str, bg_color: str) -> None:
-    """
-    Displays a message in the Streamlit UI with the specified background color.
-    """
-    st.markdown(
-        f"""
-        <div style='background: {bg_color}; 
-                    padding: 10px; 
-                    border-radius: 8px; 
-                    margin: 5px 0; 
-                    font-family: monospace;'>
-            <b>{label}:</b><br>{message}
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
 
 
 with st.expander("🥸 Supervisor Prompt"):
@@ -218,21 +224,13 @@ if st.button("Run AI Supervisor"):
                         # If there's no content, you can skip or display something else
                         continue
 
-                    if agent == "supervisor":
-                        # Supervisor output is JSON
-                        response_data = json.loads(result)
-                        display_message(
-                            "Supervisor Thought",
-                            response_data.get("thought", "No thought provided"),
-                            AGENT_COLORS["supervisor"],  # Unique color for supervisor
-                        )
-                    else:
-                        # Other agents: log_analyzer, incident_monitor, etc.
-                        display_message(
-                            f"{agent.capitalize()} Output",
-                            result,
-                            AGENT_COLORS.get(agent, AGENT_COLORS["default"]),
-                        )
+                    display_message(
+                        f"{agent.capitalize()} Output",
+                        result,
+                        AGENT_COLORS.get(agent, AGENT_COLORS["default"]),
+                    )
+                    # Other agents: log_analyzer, incident_monitor, etc.
+
                 time.sleep(1)
         except Exception as e:
             display_message("❌ Error Occurred", str(e), "#ffebee")
