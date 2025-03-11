@@ -163,16 +163,13 @@ def plot_user_scatter(user_embeddings):
 
     st.plotly_chart(fig)
 
-
-def create_user_artist_network(
-    similarity_df, user_artist_matrix, selected_user, top_n_users=5, top_n_artists=5
+def create_user_artist_shared_network(
+    similarity_df, user_artist_matrix, selected_user, top_n_users=7, top_n_artists=5
 ):
     """
-    Creates an interactive force-directed graph that clearly shows:
-    - 🎯 Main user
-    - 👥 Similar users
-    - 🎵 Shared artists
-    - 💡 Recommended artists
+    Creates a force-directed graph where:
+    - Users (🔵) connect via shared artists (🟢)
+    - Recommended artists (🟡) connect to the user providing the recommendation
     """
     G = nx.Graph()
 
@@ -191,7 +188,6 @@ def create_user_artist_network(
         G.add_node(
             user, size=20, color="blue", label=f"👥 {user}"
         )  # Similar users in blue
-        G.add_edge(selected_user, user, weight=2)  # Connect main user to similar users
 
     # 🎵 Artists Liked by Main User
     main_user_artists = set(
@@ -200,35 +196,58 @@ def create_user_artist_network(
         ].index
     )
 
-    # 🔄 Find Recommended Artists (Artists liked by similar users but not the main user)
-    recommended_artists = set()
+    # 🔗 Shared Artists Between Users
+    artist_connections = {}  # Store which artists connect which users
     for user in similar_users:
         user_artists = set(
             user_artist_matrix.loc[user][user_artist_matrix.loc[user] > 0].index
         )
-        recommended_artists.update(user_artists - main_user_artists)
+        shared_artists = main_user_artists.intersection(
+            user_artists
+        )  # Find common artists
 
-    # 🎵 Add Shared Artists
-    for artist in main_user_artists:
+        for artist in shared_artists:
+            if artist not in artist_connections:
+                artist_connections[artist] = set()
+            artist_connections[artist].update(
+                [selected_user, user]
+            )  # Store which users like this artist
+
+    # 🎵 Add Shared Artists & Connect Users
+    for artist, users in artist_connections.items():
         G.add_node(
             artist, size=15, color="green", label=f"🎵 {artist}"
-        )  # Artists liked by the main user
-        G.add_edge(
-            selected_user, artist, weight=1.5
-        )  # Connect main user to their artists
+        )  # Artists in green
 
-    # 💡 Add Recommended Artists
-    for artist in recommended_artists:
+        for user in users:
+            G.add_edge(user, artist, weight=1.5)  # Connect users to shared artists
+
+    # 💡 Add Recommended Artists **BUT CONNECT TO THE RECOMMENDING USER**
+    recommended_artist_connections = {}  # Store which user recommends which artist
+    for user in similar_users:
+        user_artists = set(
+            user_artist_matrix.loc[user][user_artist_matrix.loc[user] > 0].index
+        )
+        new_recommendations = (
+            user_artists - main_user_artists
+        )  # Artists liked by others but not the main user
+
+        for artist in new_recommendations:
+            if artist not in recommended_artist_connections:
+                recommended_artist_connections[artist] = set()
+            recommended_artist_connections[artist].add(
+                user
+            )  # Connect artist to the recommending user
+
+    for artist, recommending_users in recommended_artist_connections.items():
         G.add_node(
             artist, size=15, color="yellow", label=f"💡 {artist}"
-        )  # Recommended artists
-        for user in similar_users:
-            if artist in set(
-                user_artist_matrix.loc[user][user_artist_matrix.loc[user] > 0].index
-            ):
-                G.add_edge(
-                    user, artist, weight=1
-                )  # Connect recommended artists to users who like them
+        )  # Recommended artists in yellow
+
+        for user in recommending_users:
+            G.add_edge(
+                user, artist, weight=1
+            )  # CONNECT TO THE RECOMMENDING USER, NOT MAIN USER
 
     # 🎨 Convert Graph to Plotly
     pos = nx.spring_layout(G, seed=42)
@@ -274,11 +293,10 @@ def create_user_artist_network(
         showlegend=False,
         hovermode="closest",
         margin=dict(b=0, l=0, r=0, t=40),
-        title="🔗 User-Artist Relationship Network",
+        title="🔗 User-Artist Shared Connection Network",
     )
 
     return fig
-
 
 def create_user_artist_chord(df, selected_user, top_n_users=10, top_n_artists=10):
     """
@@ -403,10 +421,16 @@ with tabs[1]:
             with st.expander("🔗 View User-Artist Connection Map"):
                 fig = create_user_artist_chord(df, selected_user)
                 st.plotly_chart(fig)
-            
+
             # Display in Streamlit
-            with st.expander("🔗 View User-Artist Relationship Network"):
-                fig = create_user_artist_network(similarity_df, user_artist_matrix, selected_user, top_n_users=5, top_n_artists=5)
+            with st.expander("🙂👨‍🎤🥸 View User-Artist Relationship Network"):
+                fig = create_user_artist_shared_network(
+                    similarity_df,
+                    user_artist_matrix,
+                    selected_user,
+                    top_n_users=5,
+                    top_n_artists=5,
+                )
                 st.plotly_chart(fig)
 
             # ---- 📌 Run the User Mapping ----
