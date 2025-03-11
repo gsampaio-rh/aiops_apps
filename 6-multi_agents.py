@@ -394,11 +394,29 @@ user_prompt = st.text_area(
     "📝 Describe your issue:", "Nginx service is failing intermittently."
 )
 
-if st.button("Run AI Supervisor"):
+if st.button("Run AI Agents Graph"):
     with st.spinner("🤖 AI Agents Collaborating..."):
         try:
+            step_tracker = st.empty()  # 🔥 Single execution tracker (Fix)
+            executed_steps = []  # Store execution order
+
             for step in graph.stream({"messages": [HumanMessage(content=user_prompt)]}):
                 for agent, result in step.items():
+                    # Append to execution list
+                    executed_steps.append(agent)
+
+                    # 🔥 **Update Execution Step List (Properly)**
+                    step_tracker.markdown(
+                        "### **Execution Steps**"
+                    )  # Render title once
+                    step_list = "\n".join(
+                        [
+                            f"**{idx+1}. {step_name.capitalize()}** ➡️ "
+                            for idx, step_name in enumerate(executed_steps)
+                        ]
+                    )
+                    step_tracker.markdown(step_list)  # Update single execution block
+
                     if result is None:
                         # If there's no content, you can skip or display something else
                         continue
@@ -408,7 +426,6 @@ if st.button("Run AI Supervisor"):
                         result,
                         AGENT_COLORS.get(agent, AGENT_COLORS["default"]),
                     )
-                    # Other agents: log_analyzer, incident_monitor, etc.
 
                 time.sleep(1)
         except Exception as e:
