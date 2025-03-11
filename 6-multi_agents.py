@@ -3,9 +3,7 @@ import time
 import json
 import networkx as nx
 import matplotlib.pyplot as plt
-from langchain.llms import Ollama
-from langchain.memory import ConversationBufferMemory
-from langchain.callbacks import StreamlitCallbackHandler
+from langchain_ollama import OllamaLLM
 import requests
 from typing import Literal
 from langgraph.graph import StateGraph, MessagesState, START, END
@@ -37,8 +35,7 @@ st.markdown(
 )
 
 # ---- LLM SETUP ----
-llm = Ollama(model="mistral")
-memory = ConversationBufferMemory(memory_key="chat_history")
+llm = OllamaLLM(model="mistral")
 
 
 # ---- TOOL FUNCTIONS ----
@@ -76,7 +73,6 @@ def restart_service():
 members = ["log_analyzer", "incident_monitor", "fix_suggester", "action_executor"]
 options = members + ["FINISH"]
 
-# ---- SUPERVISOR PROMPT ----
 # ---- SUPERVISOR PROMPT ----
 supervisor_prompt = (
     "You are an AI-powered supervisor responsible for coordinating an automated incident response system. "
@@ -174,15 +170,15 @@ with st.expander("⛓️ Graph"):
     st.code(
         """
         # ---- BUILDING THE MULTI-AGENT GRAPH ----
-builder = StateGraph(MessagesState)
-builder.add_edge(START, "supervisor")
-builder.add_node("supervisor", supervisor_node)
-builder.add_node("log_analyzer", log_analyzer_node)
-builder.add_node("incident_monitor", incident_monitor_node)
-builder.add_node("fix_suggester", fix_suggester_node)
-builder.add_node("action_executor", action_executor_node)
+        builder = StateGraph(MessagesState)
+        builder.add_edge(START, "supervisor")
+        builder.add_node("supervisor", supervisor_node)
+        builder.add_node("log_analyzer", log_analyzer_node)
+        builder.add_node("incident_monitor", incident_monitor_node)
+        builder.add_node("fix_suggester", fix_suggester_node)
+        builder.add_node("action_executor", action_executor_node)
 
-graph = builder.compile()
+        graph = builder.compile()
         """,
         language="text",
     )
