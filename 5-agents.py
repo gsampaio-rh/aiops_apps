@@ -9,7 +9,7 @@ from langchain.tools import tool
 from langchain.memory import ConversationBufferMemory
 from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
-from langchain.callbacks import StreamlitCallbackHandler
+from langchain_community.callbacks.streamlit import StreamlitCallbackHandler
 import requests
 
 # ---- APP CONFIG ----
