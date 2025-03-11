@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 import networkx as nx
+import plotly.graph_objects as go
 import matplotlib.pyplot as plt
 from sklearn.metrics.pairwise import cosine_similarity
 from scipy.sparse import csr_matrix
@@ -163,6 +164,161 @@ def plot_user_scatter(user_embeddings):
     st.plotly_chart(fig)
 
 
+def create_user_artist_network(
+    similarity_df, user_artist_matrix, selected_user, top_n_users=5, top_n_artists=5
+):
+    """
+    Creates an interactive force-directed graph that clearly shows:
+    - 🎯 Main user
+    - 👥 Similar users
+    - 🎵 Shared artists
+    - 💡 Recommended artists
+    """
+    G = nx.Graph()
+
+    # 🎯 Add Main User
+    G.add_node(selected_user, size=30, color="red", label=f"🎯 {selected_user}")
+
+    # 👥 Find Similar Users
+    similar_users = (
+        similarity_df[selected_user]
+        .sort_values(ascending=False)
+        .head(top_n_users)
+        .index
+    )
+
+    for user in similar_users:
+        G.add_node(
+            user, size=20, color="blue", label=f"👥 {user}"
+        )  # Similar users in blue
+        G.add_edge(selected_user, user, weight=2)  # Connect main user to similar users
+
+    # 🎵 Artists Liked by Main User
+    main_user_artists = set(
+        user_artist_matrix.loc[selected_user][
+            user_artist_matrix.loc[selected_user] > 0
+        ].index
+    )
+
+    # 🔄 Find Recommended Artists (Artists liked by similar users but not the main user)
+    recommended_artists = set()
+    for user in similar_users:
+        user_artists = set(
+            user_artist_matrix.loc[user][user_artist_matrix.loc[user] > 0].index
+        )
+        recommended_artists.update(user_artists - main_user_artists)
+
+    # 🎵 Add Shared Artists
+    for artist in main_user_artists:
+        G.add_node(
+            artist, size=15, color="green", label=f"🎵 {artist}"
+        )  # Artists liked by the main user
+        G.add_edge(
+            selected_user, artist, weight=1.5
+        )  # Connect main user to their artists
+
+    # 💡 Add Recommended Artists
+    for artist in recommended_artists:
+        G.add_node(
+            artist, size=15, color="yellow", label=f"💡 {artist}"
+        )  # Recommended artists
+        for user in similar_users:
+            if artist in set(
+                user_artist_matrix.loc[user][user_artist_matrix.loc[user] > 0].index
+            ):
+                G.add_edge(
+                    user, artist, weight=1
+                )  # Connect recommended artists to users who like them
+
+    # 🎨 Convert Graph to Plotly
+    pos = nx.spring_layout(G, seed=42)
+
+    edge_x, edge_y = [], []
+    for edge in G.edges(data=True):
+        x0, y0 = pos[edge[0]]
+        x1, y1 = pos[edge[1]]
+        edge_x.extend([x0, x1, None])
+        edge_y.extend([y0, y1, None])
+
+    edge_trace = go.Scatter(
+        x=edge_x,
+        y=edge_y,
+        line=dict(width=0.5, color="gray"),
+        hoverinfo="none",
+        mode="lines",
+    )
+
+    node_x, node_y, node_size, node_color, text_labels = [], [], [], [], []
+    for node in G.nodes():
+        x, y = pos[node]
+        node_x.append(x)
+        node_y.append(y)
+        node_size.append(G.nodes[node]["size"])
+        node_color.append(G.nodes[node]["color"])
+        text_labels.append(G.nodes[node]["label"])
+
+    node_trace = go.Scatter(
+        x=node_x,
+        y=node_y,
+        mode="markers+text",
+        text=text_labels,
+        marker=dict(
+            size=node_size, color=node_color, line=dict(width=2, color="black")
+        ),
+        textposition="top center",
+        hoverinfo="text",
+    )
+
+    fig = go.Figure(data=[edge_trace, node_trace])
+    fig.update_layout(
+        showlegend=False,
+        hovermode="closest",
+        margin=dict(b=0, l=0, r=0, t=40),
+        title="🔗 User-Artist Relationship Network",
+    )
+
+    return fig
+
+
+def create_user_artist_chord(df, selected_user, top_n_users=10, top_n_artists=10):
+    """
+    Creates a chord diagram of user-artist relationships.
+    """
+    # Get top similar users
+    similar_users = (
+        similarity_df[selected_user]
+        .sort_values(ascending=False)
+        .head(top_n_users)
+        .index
+    )
+
+    # Find top artists for each similar user
+    user_artist_counts = (
+        df[df["user_id"].isin([selected_user] + list(similar_users))]["artistname"]
+        .value_counts()
+        .head(top_n_artists)
+    )
+
+    # Convert to a format for Plotly Sunburst
+    data = []
+    for user in [selected_user] + list(similar_users):
+        for artist in user_artist_counts.index:
+            count = len(df[(df["user_id"] == user) & (df["artistname"] == artist)])
+            if count > 0:
+                data.append({"user": user, "artist": artist, "count": count})
+
+    data_df = pd.DataFrame(data)
+
+    fig = px.sunburst(
+        data_df,
+        path=["user", "artist"],
+        values="count",
+        title="🎼 User-Artist Relationship",
+    )
+
+    return fig
+
+
 # ---- USER TAB ----
 with tabs[1]:
     if uploaded_file:
@@ -242,7 +398,17 @@ with tabs[1]:
             user_artist_sparse = csr_matrix(user_artist_matrix.values)
             similarity_matrix = cosine_similarity(user_artist_sparse)
             similarity_df = pd.DataFrame(similarity_matrix, index=user_artist_matrix.index, columns=user_artist_matrix.index)
+
+            # Display in Streamlit
+            with st.expander("🔗 View User-Artist Connection Map"):
+                fig = create_user_artist_chord(df, selected_user)
+                st.plotly_chart(fig)
             
+            # Display in Streamlit
+            with st.expander("🔗 View User-Artist Relationship Network"):
+                fig = create_user_artist_network(similarity_df, user_artist_matrix, selected_user, top_n_users=5, top_n_artists=5)
+                st.plotly_chart(fig)
+
             # ---- 📌 Run the User Mapping ----
             with st.expander(
                 "📍 2D User Similarity Map"
