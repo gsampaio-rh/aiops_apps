@@ -467,7 +467,6 @@ with tabs[4]:
         if logs_pred.shape[0] < 2:
             st.warning("Número insuficiente de logs para predição.")
         else:
-            # Make sure the trained model and vectorizer are saved in session_state
             if (
                 "tfidf_vectorizer_train" not in st.session_state
                 or "log_model" not in st.session_state
@@ -477,32 +476,22 @@ with tabs[4]:
                     "O modelo não foi treinado. Execute a etapa de treinamento primeiro."
                 )
             else:
-                # Interface para seleção de um log para predição
-                # Use the stored vectorizer to determine the total number of vectorized logs
                 tfidf_vectorizer = st.session_state["tfidf_vectorizer_train"]
-                total_logs = (
-                    tfidf_vectorizer.transform(logs_pred["event_clean"]).shape[0] - 1
-                )
-                
-                # Prepare log options for selectbox (truncate for readability)
                 log_options = logs_pred["event_clean"].tolist()
                 truncated_options = [
                     f"{i+1}. {log[:80]}..." for i, log in enumerate(log_options)
                 ]
 
-                # Selectbox for log selection
                 selected_log_index = st.selectbox(
                     "📜 Selecione um log para predição:",
                     options=range(len(log_options)),
                     format_func=lambda i: truncated_options[i],
                 )
 
-                # Display selected log
                 selected_log = log_options[selected_log_index]
 
-                # Compute the vector for the selected log using the stored vectorizer
                 with st.spinner("Realizando previsão..."):
-                    time.sleep(1)  # Simulate processing delay
+                    time.sleep(1)
                     sample_vector = tfidf_vectorizer.transform([selected_log])
                     log_model = st.session_state["log_model"]
                     predicted_label = log_model.predict(sample_vector)
@@ -512,9 +501,33 @@ with tabs[4]:
                     pred_prob = log_model.predict_proba(sample_vector)[0]
                     confidence = pred_prob.max()
 
-                st.markdown("**🔮 Próximo Evento Previsto:**")
-                st.code(predicted_event, language="bash")
-                st.markdown(f"**Nível de Confiança:** {confidence*100:.2f}%")
+                col1, col2, col3 = st.columns([3, 1, 3])
+
+                with col1:
+                    st.markdown("**📝 Log de Entrada:**")
+                    st.code(selected_log, language="bash")
+
+                with col2:
+                    st.markdown("### ➡️")
+                    st.markdown("Próximo Log Previsto:")
+
+                with col3:
+                    st.markdown("**🔮 Log Previsto:**")
+                    predicted_display = st.empty()
+
+                    words = predicted_event.split()
+                    displayed_text = ""
+                    for word in words:
+                        displayed_text += word + " "
+                        predicted_display.code(displayed_text, language="bash")
+                        time.sleep(0.2)
+
+                    confidence_color = (
+                        "✅" if confidence > 0.75 else "⚠️" if confidence > 0.5 else "❌"
+                    )
+                    st.markdown(
+                        f"**Nível de Confiança:** :{confidence_color}[{confidence*100:.2f}%]"
+                    )
 
                 with st.expander("Ver Probabilidades de Previsão"):
                     prob_df = pd.DataFrame(
@@ -550,7 +563,7 @@ with tabs[5]:
 
         # ✅ Interactive filters: Degree-based node filtering
         min_degree, max_degree = st.slider(
-            "📊 Filtrar por Grau do Nó:",
+            "Filtrar por Grau do Nó:",
             1,
             max(dict(G.degree()).values()),
             (1, max(dict(G.degree()).values())),
