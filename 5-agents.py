@@ -1,16 +1,15 @@
 import streamlit as st
 import time
 import json
-import networkx as nx
+import requests
 import matplotlib.pyplot as plt
-from langchain_ollama import OllamaLLM
-from langchain.agents import initialize_agent, Tool
+from langchain import hub
+from langchain.agents import AgentExecutor, create_react_agent, Tool
 from langchain.tools import tool
-from langchain.memory import ConversationBufferMemory
 from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
 from langchain_community.callbacks.streamlit import StreamlitCallbackHandler
-import requests
+from langchain_ollama import OllamaLLM
 
 # ---- APP CONFIG ----
 st.set_page_config(page_title="Autonomous AI Agent Demo", layout="wide")
@@ -36,7 +35,6 @@ st.markdown(
 
 # ---- LLM SETUP ----
 llm = OllamaLLM(model="mistral")
-memory = ConversationBufferMemory(memory_key="chat_history")
 
 # ---- EXPANDERS ----
 st.markdown("### ℹ️ Understanding AI Troubleshooting")
@@ -238,13 +236,10 @@ tools = [
     ),
 ]
 
-agent = initialize_agent(
-    tools=tools,
-    llm=llm,
-    agent="zero-shot-react-description",
-    memory=memory,
-    verbose=True,
-)
+# ---- CREATE REACT AGENT ----
+prompt = hub.pull("hwchase17/react")  # Pulling a standard ReAct prompt
+agent = create_react_agent(llm, tools, prompt)
+agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True, return_intermediate_steps=True)
 
 # ---- USER INTERACTION ----
 user_prompt = st.text_area(
@@ -255,10 +250,12 @@ user_prompt = st.text_area(
 if st.button("Run AI Troubleshooting Agent"):
     with st.spinner("🤖 AI Agent Thinking..."):
         try:
-            response = agent.run(user_prompt, callbacks=[StreamlitCallbackHandler(st)])
+            response = agent_executor.invoke(
+                {"input": prompt}, {"callbacks": [StreamlitCallbackHandler(st)]}
+            )
             st.markdown("### 🤖 Agent Response")
             st.markdown(
-                f"<div class='agent-action'><b>Action:</b><br>{response}</div>",
+                f"<div class='agent-action'><b>Action:</b><br>{response['output']}</div>",
                 unsafe_allow_html=True,
             )
         except Exception as e:
