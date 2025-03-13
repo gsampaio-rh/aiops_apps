@@ -13,13 +13,17 @@ from scipy.spatial.distance import cdist
 import matplotlib.pyplot as plt
 
 
-# Function to scan directories for repositories
+# Function to find repositories with graphical folder selection
 def find_repositories(root_path):
     repositories = []
+    folder_structure = {}
+
     for root, dirs, files in os.walk(root_path):
-        if ".git" in dirs:  # Detect repositories
+        if ".git" in dirs:
             repositories.append(root)
-    return repositories
+            folder_structure[root] = dirs + files
+
+    return repositories, folder_structure
 
 
 # Function to extract tech stack information
@@ -114,29 +118,51 @@ repo_path = st.text_input("Enter root directory containing repositories:")
 
 if repo_path and os.path.exists(repo_path):
     with st.spinner("🔍 Scanning repositories.."):
-        repos = find_repositories(repo_path)
+        repositories, folder_structure = find_repositories(repo_path)
 
-    if repos:
-        st.write(f"✅ Found {len(repos)} repositories.")
+    if repositories:
+        st.write(f"✅ Found {len(repositories)} repositories.")
 
         # Extracting features
         data = []
-        for repo in repos:
+        for repo in repositories:
             repo_name = os.path.basename(repo)
             features = extract_features(repo)
             data.append({"repo": repo_name, **features})
 
         df = pd.DataFrame(data)
-        st.dataframe(df.head(100))  # Only display first 50 rows to reduce data load
+
+        with st.spinner("📊 Analysing data..."):
+            st.dataframe(df.head(100))  # Only display first 50 rows to reduce data load
+            # Additional Analytics
+            st.subheader("📊 Additional Insights")
+
+            lang_counts = df["languages"].str.split(", ").explode().value_counts()
+            fig_lang = px.pie(
+                values=lang_counts.values,
+                names=lang_counts.index,
+                title="Language Distribution",
+            )
+            st.plotly_chart(fig_lang, use_container_width=True)
+
+            dep_counts = df["dependencies"].str.split(", ").explode().value_counts()
+            fig_dep = px.bar(
+                x=dep_counts.index,
+                y=dep_counts.values,
+                title="Dependency Usage",
+                labels={"x": "Dependency", "y": "Count"},
+            )
+            st.plotly_chart(fig_dep, use_container_width=True)
+
         with st.spinner("📊 Clustering repositories..."):
             # Convert text features to numeric
             vectorizer = TfidfVectorizer(stop_words="english", max_features=2000)  # Limit features to reduce memory usage
             feature_matrix = vectorizer.fit_transform(df['languages'] + ', ' + df['dependencies'] + ', ' + df['contents'])
-            
+
             # Reduce dimensionality using TruncatedSVD (LSA)
             svd = TruncatedSVD(n_components=2, random_state=42)
             reduced_features = svd.fit_transform(feature_matrix)
-            
+
             # Determine the optimal number of clusters using the Elbow Method
             distortions = []
             K = range(2, 10)
@@ -144,7 +170,7 @@ if repo_path and os.path.exists(repo_path):
                 kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
                 kmeans.fit(reduced_features)
                 distortions.append(sum(np.min(cdist(reduced_features, kmeans.cluster_centers_, 'euclidean'), axis=1)) / reduced_features.shape[0])
-            
+
             # Plot elbow method
             fig, ax = plt.subplots()
             ax.plot(K, distortions, 'bo-')
@@ -152,10 +178,10 @@ if repo_path and os.path.exists(repo_path):
             ax.set_ylabel('Distortion')
             ax.set_title('Elbow Method for Optimal k')
             st.pyplot(fig)
-            
+
             # Choose the best clustering method
             clustering_method = st.selectbox("Choose clustering method:", ["KMeans", "DBSCAN"])
-            
+
             if clustering_method == "KMeans":
                 optimal_clusters = st.slider("Select number of clusters:", 2, 10, 5)
                 kmeans = KMeans(n_clusters=optimal_clusters, random_state=42, n_init=10)
@@ -163,11 +189,11 @@ if repo_path and os.path.exists(repo_path):
             else:
                 dbscan = DBSCAN(eps=0.5, min_samples=5)
                 clusters = dbscan.fit_predict(reduced_features)
-            
+
             df['cluster'] = clusters
             df['x'] = reduced_features[:, 0]
             df['y'] = reduced_features[:, 1]
-            
+
             # Visualization
             fig = px.scatter(df, x='x', y='y', color=df['cluster'].astype(str), hover_data=['repo', 'languages', 'dependencies'], title="Repository Clusters")
             st.plotly_chart(fig, use_container_width=True)
