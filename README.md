@@ -13,6 +13,7 @@ Each module is built with Streamlit for UI, Langchain for AI workflows, and vari
 - **RAG-based Intelligent Search**: AI retrieves, ranks, and presents information from documents.
 - **Multi-Agent Incident Management**: AI agents coordinate log analysis, incident detection, and resolution.
 - **Reinforcement Learning AI Trainer**: AI-driven reinforcement learning system for training and optimizing strategies.
+- **AI Repository Clustering**: Automated scanning of local Git repositories to extract features, visualize distributions, and cluster repos by similarity.
 
 ---
 
@@ -27,6 +28,7 @@ Each module is built with Streamlit for UI, Langchain for AI workflows, and vari
 │-- 5-agents.py               # Standalone AI agents for task automation
 │-- 6-multi_agents.py         # AI-driven incident management with multi-agents
 │-- 7-rl.py                   # Reinforcement Learning-based AI Trainer
+│-- 8-clustering-repos.py     # AI-powered repository clustering and feature extraction
 │-- requirements.txt          # Dependencies for running the project
 │-- README.md                # Project documentation
 │-- data/                     # Data storage directory
@@ -91,6 +93,12 @@ streamlit run 6-multi_agents.py
 
 ```sh
 streamlit run 7-rl.py
+```
+
+#### AI-Powered Repository Clustering
+
+```sh
+streamlit run 8-clustering-repos.py
 ```
 
 ---
@@ -162,6 +170,19 @@ A reinforcement learning-based AI system that optimizes algorithmic strategies f
 - Evaluates multiple AI-generated solutions in real-time.
 - Implements reinforcement rewards to enhance decision-making.
 - Supports real-time visualization of training progress.
+
+### 🔹 AI-Powered Repository Clustering (8-clustering-repos.py)
+
+Scans a directory containing multiple Git repositories, extracts code features (languages, dependencies, lines of code, etc.), and uses machine learning to cluster similar repositories.
+
+**Highlights**:
+
+- Automatically detects `.git` folders.
+- Identifies programming languages based on file types.
+- Extracts dependencies from files (e.g., `requirements.txt`, `package.json`).
+- Summarizes code snippets for text-based clustering.
+- Provides advanced clustering methods (K-Means, DBSCAN, Hierarchical).
+- Visualizes clusters in 2D using dimensionality reduction (SVD).
 
 ---
 
