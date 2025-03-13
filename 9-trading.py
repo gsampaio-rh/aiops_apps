@@ -3,13 +3,19 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
-from datetime import datetime
+from datetime import datetime, timedelta
+import random
+
+# For anomaly detection
+from sklearn.ensemble import IsolationForest
+from sklearn.preprocessing import StandardScaler
 
 # -------------- Page Setup --------------
 st.set_page_config(page_title="Anomaly Detection Tutorial", layout="wide")
 
-st.title("💹 AI for Anomaly Detection in Trading")
+st.title("💹 Advanced AI for Anomaly Detection in Trading")
 
+# ------- Define Tabs -------
 tabs = st.tabs(
     [
         "🏠 Home",
@@ -19,80 +25,139 @@ tabs = st.tabs(
     ]
 )
 
-# =======================================
-# 1) HOME TAB
-# =======================================
+# =============== Trader Names ===============
+TRADER_NAMES = [
+    "Alice",
+    "Bob",
+    "Charlie",
+    "Diana",
+    "Eve",
+    "Frank",
+    "Gina",
+    "Hank",
+    "Ivy",
+    "James",
+    "Karen",
+    "Leo",
+    "Mona",
+    "Nick",
+    "Olivia",
+    "Paul",
+    "Queen",
+    "Ray",
+    "Sara",
+    "Tom",
+    "Uma",
+    "Victor",
+    "Wendy",
+    "Xander",
+    "Yara",
+    "Zack",
+]
+
+
+def get_trader_name(trader_id, seed_val=42):
+    """
+    Deterministically pick a human-friendly name for each trader_id
+    so the same ID always maps to the same name.
+    If we run out of names, we append a number.
+    """
+    random.seed(trader_id + seed_val)
+    idx = trader_id % len(TRADER_NAMES)
+    base_name = TRADER_NAMES[idx]
+    suffix_num = trader_id // len(TRADER_NAMES)
+    if suffix_num > 0:
+        base_name += f"_{suffix_num}"
+    return base_name
+
+
+# =============== Synthetic Data Generation ===============
+@st.cache_data
+def generate_synthetic_trades(n_traders, anomaly_prob, seed_val):
+    np.random.seed(seed_val)
+    random.seed(seed_val)
+    data = []
+    trade_id_counter = 1
+
+    for trader_id in range(n_traders):
+        suspicious = np.random.rand() < anomaly_prob
+        # Suspicious traders have more trades with bigger volumes
+        n_trades = (
+            np.random.randint(20, 40) if not suspicious else np.random.randint(50, 80)
+        )
+
+        for _ in range(n_trades):
+            if suspicious:
+                volume = np.random.normal(5000, 1500)  # bigger trades
+                success_chance = 0.80  # suspicious might fail more often
+            else:
+                volume = np.random.normal(1000, 300)
+                success_chance = 0.90
+
+            timestamp = datetime.now() - pd.Timedelta(np.random.randint(1, 72), "h")
+            counterparty = np.random.randint(0, n_traders)
+            while counterparty == trader_id:
+                counterparty = np.random.randint(0, n_traders)
+
+            succeeded = np.random.rand() < success_chance
+
+            data.append(
+                {
+                    "trade_id": trade_id_counter,
+                    "trader_id": trader_id,
+                    "trader_name": get_trader_name(trader_id, seed_val),
+                    "counterparty_id": counterparty,
+                    "volume": float(max(10, abs(volume))),
+                    "timestamp": timestamp,
+                    "true_suspicious_trader": suspicious,
+                    "trade_succeeded": succeeded,
+                }
+            )
+            trade_id_counter += 1
+    df = pd.DataFrame(data)
+    return df
+
+
+# =============== HOME TAB ===============
 with tabs[0]:
     st.header("Welcome to the Tutorial")
     st.markdown(
         """
-        This demo simulates trades and then **flags anomalous traders** using 
-        a simple formula. The goal is to see *why* each trader is flagged.
+        This demo simulates trades and uses **multiple features** plus an 
+        **Isolation Forest** for anomaly detection. We aim to see *why* each trader is flagged.
         
         **Tutorial Steps**:
         1. **Trade Data**: View the synthetic trades and basic stats.
-        2. **Anomaly Detection**: See how we compute each trader's “suspicious_score” 
-           and interpret why they're flagged.
+        2. **Anomaly Detection**: See how we compute advanced features 
+           (mean trade size, success ratio, time-between-trades) and run an Isolation Forest.
+        3. **Detailed Breakdown**: Explore expansions and time-series patterns for flagged traders.
         """
     )
 
     st.sidebar.header("Simulation Settings")
     num_traders = st.sidebar.slider("Number of Traders", 10, 200, 50)
     anomaly_probability = st.sidebar.slider(
-        "Probability a Trader is 'Suspicious'",
-        0.0, 1.0, 0.20
+        "Probability a Trader is 'Suspicious'", 0.0, 1.0, 0.20
     )
     seed = st.sidebar.number_input("Random Seed", value=42, step=1)
 
-    @st.cache_data
-    def generate_synthetic_trades(n_traders, anomaly_prob, seed_val):
-        np.random.seed(seed_val)
-        data = []
-        trade_id_counter = 1
-        for trader_id in range(n_traders):
-            suspicious = np.random.rand() < anomaly_prob
-            # suspicious traders appear in more trades with bigger volumes
-            n_trades = np.random.randint(20, 40) if not suspicious else np.random.randint(50, 80)
-
-            for _ in range(n_trades):
-                if suspicious:
-                    volume = np.random.normal(4000, 1000)  # bigger trades
-                else:
-                    volume = np.random.normal(600, 200)
-
-                # some random timestamp
-                timestamp = datetime.now() - pd.Timedelta(np.random.randint(1, 72), "h")
-
-                # random counterparty
-                c_id = np.random.randint(0, n_traders)
-                while c_id == trader_id:
-                    c_id = np.random.randint(0, n_traders)
-
-                data.append({
-                    "trade_id": trade_id_counter,
-                    "trader_id": trader_id,
-                    "counterparty_id": c_id,
-                    "volume": float(max(10, abs(volume))),
-                    "timestamp": timestamp,
-                    "true_suspicious_trader": suspicious
-                })
-                trade_id_counter += 1
-        return pd.DataFrame(data)
-
     # Generate or update trades in session state
     if "trades" not in st.session_state:
-        st.session_state["trades"] = generate_synthetic_trades(num_traders, anomaly_probability, seed)
+        st.session_state["trades"] = generate_synthetic_trades(
+            num_traders, anomaly_probability, seed
+        )
     else:
-        st.session_state["trades"] = generate_synthetic_trades(num_traders, anomaly_probability, seed)
+        st.session_state["trades"] = generate_synthetic_trades(
+            num_traders, anomaly_probability, seed
+        )
 
-# =======================================
-# 2) TRADE DATA TAB
-# =======================================
+# =============== TRADE DATA TAB ===============
 with tabs[1]:
     st.header("📈 Synthetic Trade Data")
-    df = st.session_state["trades"]
+    df = st.session_state["trades"].copy()
+
     st.markdown("**Preview of the trade dataset:**")
-    st.dataframe(df.head(30))
+    st.dataframe(df.head(30), use_container_width=True)
 
     total_trades = len(df)
     unique_traders = df["trader_id"].nunique()
@@ -103,7 +168,7 @@ with tabs[1]:
     col2.metric("Unique Traders", unique_traders)
     col3.metric("Suspicious Traders", suspicious_traders)
 
-    st.subheader("Trade Volume Distribution")
+    st.subheader("Trade Volume Distribution (Average per Trader)")
     # Group by trader, get average volume
     group_vol = df.groupby("trader_id")["volume"].mean().reset_index()
     group_vol["susp"] = df.groupby("trader_id")["true_suspicious_trader"].max().values
@@ -113,14 +178,12 @@ with tabs[1]:
         x="volume",
         color="susp",
         nbins=30,
-        labels={"volume": "Avg Trade Volume", "susp": "Suspicious"},
-        title="Histogram of Average Trade Volume per Trader"
+        labels={"volume": "Avg Trade Volume", "susp": "Suspicious?"},
+        title="Histogram of Average Trade Volume per Trader",
     )
     st.plotly_chart(fig_hist, use_container_width=True)
 
-# =======================================
-# 3) ANOMALY DETECTION & EXPLANATION
-# =======================================
+# =============== ANOMALY DETECTION & EXPLANATION TAB ===============
 with tabs[2]:
     st.header("🚨 Anomaly Detection & Explanation")
 
@@ -128,143 +191,135 @@ with tabs[2]:
 
     st.markdown(
         """
-        In this demo, each trader has two features:
-        - **Total Volume**: The sum of all trade volumes for that trader.
-        - **Trade Count**: How many trades they've participated in.
+        **Multiple Features** used for each trader:
+        - **Total Volume** (sum of volumes)
+        - **Trade Count** (number of trades)
+        - **Mean Trade Size** = total_volume / trade_count
+        - **Success Ratio** = (# successes) / (trade_count)
+        - **Time Between Trades** (average seconds between trades)
+        
+        We'll feed these features into an **Isolation Forest** to detect anomalies.
         """
     )
 
-    # --------------------------------------------------
-    # 1. Compute Features for Each Trader
-    # --------------------------------------------------
+    # ------------------- 1) Aggregate Trader-Level Features --------------------
     grouped = (
-        df.groupby("trader_id")
+        df.groupby(["trader_id", "trader_name"])
         .agg(
             total_volume=("volume", "sum"),
             trade_count=("trade_id", "count"),
+            num_success=("trade_succeeded", "sum"),
+            first_trade=("timestamp", "min"),
+            last_trade=("timestamp", "max"),
             true_susp=("true_suspicious_trader", "max"),
         )
         .reset_index()
     )
 
-    # Calculate means & standard deviations
-    mean_vol = grouped["total_volume"].mean()
-    std_vol = grouped["total_volume"].std(ddof=1)
-    mean_count = grouped["trade_count"].mean()
-    std_count = grouped["trade_count"].std(ddof=1)
+    grouped["mean_trade_size"] = grouped["total_volume"] / grouped["trade_count"]
+    grouped["success_ratio"] = grouped["num_success"] / grouped["trade_count"]
+    grouped["time_between_trades"] = (
+        (grouped["last_trade"] - grouped["first_trade"]).dt.total_seconds()
+        / grouped["trade_count"]
+    ).fillna(0)
 
-    # Z-scores
-    grouped["z_volume"] = (grouped["total_volume"] - mean_vol) / std_vol
-    grouped["z_count"] = (grouped["trade_count"] - mean_count) / std_count
-    grouped["suspicious_score"] = grouped["z_volume"] + grouped["z_count"]
+    # ------------------- 2) Isolation Forest --------------------
+    st.subheader("Isolation Forest Model")
 
-    # --------------------------------------------------
-    # 2. Show Mean & Std Dev
-    # --------------------------------------------------
-    st.subheader("Overall Stats")
-    colM1, colM2 = st.columns(2)
-    with colM1:
-        st.metric("Mean of Total Volume", f"{mean_vol:.2f}")
-        st.metric("Std Dev of Total Volume", f"{std_vol:.2f}")
-    with colM2:
-        st.metric("Mean of Trade Count", f"{mean_count:.2f}")
-        st.metric("Std Dev of Trade Count", f"{std_count:.2f}")
+    features = [
+        "total_volume",
+        "trade_count",
+        "mean_trade_size",
+        "success_ratio",
+        "time_between_trades",
+    ]
+    X = grouped[features].copy()
 
+    # Scale features
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
+
+    # Fit isolation forest
+    model = IsolationForest(
+        n_estimators=100, contamination=0.1, random_state=seed  # ~10% anomalies
+    )
+    model.fit(X_scaled)
+
+    # Predictions: -1 => anomaly, 1 => normal
+    y_pred = model.predict(X_scaled)
+    grouped["flagged"] = y_pred == -1
+
+    # For a "suspicious_score" style metric, we can use -1 * decision_function
+    # so higher = more likely anomaly
+    anomaly_scores = model.decision_function(X_scaled)  # higher => more normal
+    grouped["suspicious_score"] = -anomaly_scores  # so higher => more suspicious
+
+    num_flagged = grouped["flagged"].sum()
     st.write(
-        """
-    The **z-scores** measure how far each trader is from these means, 
-    scaled by the standard deviations.
-    """
+        f"**Isolation Forest** flagged {num_flagged} out of {len(grouped)} traders as anomalies."
     )
 
-    # --------------------------------------------------
-    # 3. Let user pick threshold & flag traders
-    # --------------------------------------------------
-    default_threshold = float(
-        grouped["suspicious_score"].quantile(0.9)
-    )  # 90th percentile
-    threshold = st.slider(
-        "Suspicious Score Threshold",
-        float(grouped["suspicious_score"].min()),
-        float(grouped["suspicious_score"].max()),
-        default_threshold,
-        help="Traders above this threshold are flagged.",
-    )
-    grouped["flagged"] = grouped["suspicious_score"] > threshold
-
-    # --------------------------------------------------
-    # 4. Show Full Computation Table
-    # --------------------------------------------------
-    st.subheader("Full Computation Table")
-    st.markdown(
-        """
-    Below you can see each trader's computed values:
-    """
-    )
+    # Display the new "grouped" table with the computed features
+    st.markdown("**Trader-Level Features & Flags**")
     st.dataframe(
         grouped[
             [
                 "trader_id",
+                "trader_name",
                 "total_volume",
                 "trade_count",
-                "z_volume",
-                "z_count",
-                "suspicious_score",
+                "mean_trade_size",
+                "success_ratio",
+                "time_between_trades",
                 "flagged",
                 "true_susp",
+                "suspicious_score",
             ]
         ].sort_values("suspicious_score", ascending=False),
         use_container_width=True,
     )
 
-    # --------------------------------------------------
-    # 5. Distribution of suspicious_score
-    # --------------------------------------------------
+    # ------------------- 3) Distribution of Suspicious Score --------------------
     st.subheader("Distribution of Suspicious Scores")
     st.markdown(
-        "Traders on the far right are more deviant. The vertical line shows your chosen threshold."
+        "Higher = more suspicious (since we took the negative of the model’s decision_function)."
     )
-
-    fig_hist = px.histogram(
+    fig_hist2 = px.histogram(
         grouped,
         x="suspicious_score",
         nbins=30,
         color="flagged",
-        title="Histogram of Suspicious Scores (color = flagged)",
         labels={"flagged": "Flagged?"},
+        title="Histogram of Suspicious Scores (Isolation Forest)",
     )
-    fig_hist.add_vline(
-        x=threshold,
-        line_width=3,
-        line_dash="dash",
-        line_color="red",
-        annotation_text=f"Threshold={threshold:.2f}",
-        annotation_position="top left",
-    )
-    st.plotly_chart(fig_hist, use_container_width=True)
+    st.plotly_chart(fig_hist2, use_container_width=True)
 
-    # --------------------------------------------------
-    # 6. Scatter Plot: z_volume vs. z_count
-    # --------------------------------------------------
-    st.subheader("Z-Score Scatter Plot (Volume vs. Trade Count)")
-    st.markdown(
-        "Points in the upper-right corner deviate more from the mean in both volume and count."
-    )
+    scores = grouped["suspicious_score"]
 
+    # Option 1: shift everything by the min plus a small offset
+    min_val = scores.min()  # could be negative
+    marker_sizes = (scores - min_val) + 1
+
+    # ------------------- 4) Scatter Plot of Two Chosen Features --------------------
+    # Let's pick "total_volume" vs "trade_count" for a quick 2D view
+    st.subheader("Scatter: Total Volume vs. Trade Count (Isolation Forest)")
     fig_scatter = px.scatter(
         grouped,
-        x="z_volume",
-        y="z_count",
+        x="total_volume",
+        y="trade_count",
         color="flagged",
-        hover_data=["trader_id", "suspicious_score", "total_volume", "trade_count"],
-        labels={"z_volume": "Z-Score (Volume)", "z_count": "Z-Score (Count)"},
-        title="z_volume vs. z_count (Colored by Flagged)",
+        hover_data=["trader_name", "suspicious_score"],
+        title="Volume vs. Trade Count (Flagged in color)",
+        labels={
+            "flagged": "Flagged?",
+            "total_volume": "Total Volume",
+            "trade_count": "Trade Count",
+        },
+        size=marker_sizes,  # your new, always-positive series
     )
     st.plotly_chart(fig_scatter, use_container_width=True)
 
-    # --------------------------------------------------
-    # 9) Basic Confusion Matrix
-    # --------------------------------------------------
+    # ------------------- 5) Confusion Matrix / Ground-Truth Check --------------------
     st.subheader("Confusion Matrix (Toy Ground Truth Check)")
     grouped["TP"] = grouped["true_susp"] & grouped["flagged"]
     grouped["FP"] = (~grouped["true_susp"]) & grouped["flagged"]
@@ -285,57 +340,75 @@ with tabs[2]:
     colD.metric("Recall", f"{recall:.2f}")
 
     st.info(
-        "Adjust the threshold to see how it affects false positives & false negatives."
+        "You can tweak the `contamination` parameter in Isolation Forest or examine `decision_function` scores to adjust how many outliers are flagged."
     )
 
+    # Store the updated grouped in session for the next tab
+    st.session_state["grouped"] = grouped
+    st.session_state["df"] = df  # original trades
+
+# =============== DETAILED BREAKDOWN TAB ===============
 with tabs[3]:
-    # --------------------------------------------------
-    # 8) Expanders: Detailed Math for Each Flagged Trader
-    # --------------------------------------------------
-    st.markdown("### Detailed Breakdown of Flagged Traders")
+    st.markdown("## Detailed Breakdown of Flagged Traders")
+
+    if "grouped" not in st.session_state:
+        st.warning("Please run the Anomaly Detection tab first.")
+        st.stop()
+
+    grouped = st.session_state["grouped"]
+    df = st.session_state["df"]
+
     flagged_df = grouped[grouped["flagged"] == True].copy()
     top_n = st.slider("Show Top N Anomalies", 1, max(1, len(flagged_df)), 5)
     flagged_sorted = flagged_df.sort_values("suspicious_score", ascending=False).head(
         top_n
     )
 
+    st.markdown("### Expand for Each Flagged Trader's Details")
     for idx, row in flagged_sorted.iterrows():
-        trader_id = row["trader_id"]
+        t_id = row["trader_id"]
+        t_name = row["trader_name"]
         tv = row["total_volume"]
         tc = row["trade_count"]
-        zv = row["z_volume"]
-        zc = row["z_count"]
+        mts = row["mean_trade_size"]
+        sr = row["success_ratio"]
+        tbt = row["time_between_trades"]
         score = row["suspicious_score"]
         ground_truth = row["true_susp"]
 
-        with st.expander(f"Trader {trader_id} — Score = {score:.2f}"):
+        with st.expander(f"Trader {t_name} (ID={t_id}) — Score = {score:.2f}"):
             st.write(f"**Total Volume** = {tv:,.2f},  **Trade Count** = {tc}")
-            st.write(f"**z_volume** = {zv:.2f}, **z_count** = {zc:.2f}")
-            st.write(
-                f"**score** = z_volume + z_count = {zv:.2f} + {zc:.2f} = {score:.2f}"
-            )
-            st.warning(f"**Flagged** because {score:.2f} > {threshold:.2f}.")
+            st.write(f"**Mean Trade Size** = {mts:,.2f}")
+            st.write(f"**Success Ratio** = {sr:.2f}")
+            st.write(f"**Time Between Trades** = {tbt:.2f} sec/trade")
+            st.write(f"**Suspicious Score** = {score:.2f}")
+            st.warning(f"**Flagged** by Isolation Forest => (score ~ {score:.2f}).")
             if ground_truth:
                 st.success(
                     "Ground Truth: This trader **is** suspicious. (True Positive)"
                 )
             else:
                 st.error(
-                    "Ground Truth: This trader **is not** suspicious. (False Positive?)"
+                    "Ground Truth: This trader is **not** suspicious. (False Positive?)"
                 )
 
-    st.subheader("Compare One Suspect to Mean Lines")
-    # --- 1) Let user pick which flagged suspect to highlight ---
-    flagged_traders = grouped[grouped["flagged"] == True]["trader_id"].tolist()
+    st.subheader("Compare One Suspect to Mean Lines (Volume vs. Count)")
+    flagged_traders = flagged_sorted["trader_id"].tolist()
     if not flagged_traders:
-        st.info("No traders flagged as anomalies under the current threshold.")
+        st.info("No traders flagged as anomalies under the current settings.")
     else:
         selected_suspect = st.selectbox(
-            "Select a flagged trader to highlight", flagged_traders
+            "Select a flagged trader to highlight",
+            flagged_traders,
+            format_func=lambda tid: grouped.loc[
+                grouped["trader_id"] == tid, "trader_name"
+            ].values[0],
         )
 
-        # --- 2) Build the scatter chart for all traders ---
-        # Create a color column that marks the selected suspect
+        mean_vol = grouped["total_volume"].mean()
+        mean_count = grouped["trade_count"].mean()
+
+        # Mark color on each trader
         def color_picker(row):
             if row["trader_id"] == selected_suspect:
                 return "SELECTED_SUSPECT"
@@ -346,14 +419,13 @@ with tabs[3]:
 
         grouped["color_label"] = grouped.apply(color_picker, axis=1)
 
-        # Plotly Express scatter
         fig_compare = px.scatter(
             grouped,
             x="total_volume",
             y="trade_count",
             color="color_label",
-            hover_data=["trader_id", "flagged"],
-            title="Suspect vs. Mean Comparison",
+            hover_data=["trader_name", "suspicious_score"],
+            title="Suspect vs. Mean Comparison (Volume vs. Count)",
             color_discrete_map={
                 "SELECTED_SUSPECT": "red",
                 "FLAGGED_OTHERS": "orange",
@@ -362,70 +434,69 @@ with tabs[3]:
             labels={"total_volume": "Total Volume", "trade_count": "Trade Count"},
         )
 
-        # --- 3) Add reference lines for means ---
-        # Vertical line at mean volume
+        # Add lines for global means
         fig_compare.add_vline(
             x=mean_vol,
             line_width=2,
             line_dash="dash",
             line_color="green",
             annotation_text=f"Mean Volume={mean_vol:.2f}",
-            annotation_position="top right",
         )
-        # Horizontal line at mean count
         fig_compare.add_hline(
             y=mean_count,
             line_width=2,
             line_dash="dash",
             line_color="green",
             annotation_text=f"Mean Count={mean_count:.2f}",
-            annotation_position="bottom left",
         )
 
-        # --- 4) Emphasize the selected suspect with a bigger marker size ---
-        # We'll update marker sizes based on color_label
+        # Enlarge marker for the selected suspect
         new_marker_sizes = []
-        for idx, row in grouped.iterrows():
-            if row["trader_id"] == selected_suspect:
-                new_marker_sizes.append(14)  # bigger for the suspect
+        for _, r in grouped.iterrows():
+            if r["trader_id"] == selected_suspect:
+                new_marker_sizes.append(14)
             else:
-                new_marker_sizes.append(8)  # normal size
-
-        # Update the figure's marker sizes
+                new_marker_sizes.append(8)
         fig_compare.update_traces(
             marker=dict(size=new_marker_sizes), selector=dict(mode="markers")
         )
 
         st.plotly_chart(fig_compare, use_container_width=True)
 
-        # --- 5) Explanation or numeric details ---
-        # Pull out the suspect's row
+        # Show numeric deviation
         suspect_row = grouped[grouped["trader_id"] == selected_suspect].iloc[0]
         st.write(
-            f"**Trader {selected_suspect}** has Total Volume = {suspect_row['total_volume']:.2f}, "
+            f"**Trader {suspect_row['trader_name']}**: "
+            f"Volume = {suspect_row['total_volume']:.2f}, "
             f"Trade Count = {suspect_row['trade_count']:.2f}"
         )
         st.write(
-            f"**Deviation from mean**: Volume is {(suspect_row['total_volume'] - mean_vol):.2f} away from {mean_vol:.2f}, "
+            f"**Deviation from mean**: "
+            f"Volume is {(suspect_row['total_volume'] - mean_vol):.2f} away from {mean_vol:.2f}, "
             f"Count is {(suspect_row['trade_count'] - mean_count):.2f} away from {mean_count:.2f}."
         )
 
     st.subheader("Suspect's Trade Patterns Over Time")
-
-    # 1) Check if we have any flagged traders:
-    flagged_traders = grouped[grouped["flagged"] == True]["trader_id"].unique().tolist()
-    if len(flagged_traders) == 0:
+    flagged_traders_all = (
+        grouped[grouped["flagged"] == True]["trader_id"].unique().tolist()
+    )
+    if len(flagged_traders_all) == 0:
         st.info("No traders flagged as anomalies under the current threshold.")
     else:
-        selected_suspect = st.selectbox(
-            "Select a flagged trader to see time-series comparison:", flagged_traders
+        selected_suspect2 = st.selectbox(
+            "Select a flagged trader to see time-series comparison:",
+            flagged_traders_all,
+            format_func=lambda tid: grouped.loc[
+                grouped["trader_id"] == tid, "trader_name"
+            ].values[0],
+            key="time_series_selectbox",  # unique key if reusing variable
         )
 
-        # 2) Filter the suspect's trades & create a time bin (e.g., hourly)
-        df["hour_bin"] = df["timestamp"].dt.floor("H")  # or "D" for daily
-        suspect_df = df[df["trader_id"] == selected_suspect].copy()
+        # Prepare time bin for trades
+        df["hour_bin"] = df["timestamp"].dt.floor("H")
+        suspect_df = df[df["trader_id"] == selected_suspect2].copy()
 
-        # 3) Compute global aggregates by time
+        # Global aggregates (all traders)
         global_vol_per_hour = (
             df.groupby("hour_bin")["volume"]
             .mean()
@@ -437,7 +508,7 @@ with tabs[3]:
             .reset_index(name="global_trade_count")
         )
 
-        # 4) Compute suspect aggregates by time
+        # Suspect aggregates
         suspect_vol_per_hour = (
             suspect_df.groupby("hour_bin")["volume"]
             .mean()
@@ -449,8 +520,7 @@ with tabs[3]:
             .reset_index(name="suspect_trade_count")
         )
 
-        # 5) Merge data so we can plot it easily
-        #    We'll do an outer join so we don't lose hours that exist in one but not the other
+        # Merge so we keep all hour bins
         merged_volume = pd.merge(
             global_vol_per_hour, suspect_vol_per_hour, on="hour_bin", how="outer"
         )
@@ -458,11 +528,10 @@ with tabs[3]:
             global_count_per_hour, suspect_count_per_hour, on="hour_bin", how="outer"
         )
 
-        # If a suspect had no trades in a given hour, suspect_avg_volume or suspect_trade_count might be NaN.
         merged_volume.fillna(0, inplace=True)
         merged_count.fillna(0, inplace=True)
 
-        # 6) Plot: Volume Over Time
+        # Plot volume over time
         fig_vol = go.Figure()
         fig_vol.add_trace(
             go.Scatter(
@@ -477,17 +546,17 @@ with tabs[3]:
                 x=merged_volume["hour_bin"],
                 y=merged_volume["suspect_avg_volume"],
                 mode="lines+markers",
-                name=f"Suspect {selected_suspect} Avg Volume",
+                name=f"Suspect {selected_suspect2} Avg Volume",
             )
         )
         fig_vol.update_layout(
-            title=f"Volume Over Time (Hourly Bin) - Trader {selected_suspect}",
+            title=f"Volume Over Time (Hourly Bin) - Trader {selected_suspect2}",
             xaxis_title="Time (Hour)",
             yaxis_title="Average Volume",
         )
         st.plotly_chart(fig_vol, use_container_width=True)
 
-        # 7) Plot: Trade Count Over Time
+        # Plot trade count over time
         fig_cnt = go.Figure()
         fig_cnt.add_trace(
             go.Scatter(
@@ -502,11 +571,11 @@ with tabs[3]:
                 x=merged_count["hour_bin"],
                 y=merged_count["suspect_trade_count"],
                 mode="lines+markers",
-                name=f"Suspect {selected_suspect} Trade Count",
+                name=f"Suspect {selected_suspect2} Trade Count",
             )
         )
         fig_cnt.update_layout(
-            title=f"Trade Count Over Time (Hourly Bin) - Trader {selected_suspect}",
+            title=f"Trade Count Over Time (Hourly Bin) - Trader {selected_suspect2}",
             xaxis_title="Time (Hour)",
             yaxis_title="Number of Trades",
         )
@@ -514,8 +583,8 @@ with tabs[3]:
 
         st.markdown(
             f"""
-        **Interpretation**: If Trader {selected_suspect} consistently has higher 
-        (or spikier) volume or trade frequency than the global average around the same times, 
-        that might indicate an anomaly or suspicious behavior.
-        """
+            **Interpretation**: If Trader {selected_suspect2} consistently shows higher 
+            (or spikier) volume/frequency than the global average at the same times, 
+            it may confirm why they're flagged.
+            """
         )
