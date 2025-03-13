@@ -107,6 +107,7 @@ def extract_summary(file_paths):
 
 
 # Streamlit UI
+st.set_page_config(page_title="AI-Powered Repository Clustering", layout="wide")
 st.title("📊 AI-Powered Repository Clustering")
 
 repo_path = st.text_input("Enter root directory containing repositories:")
