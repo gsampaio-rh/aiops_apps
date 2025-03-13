@@ -26,7 +26,6 @@ def find_repositories(root_path):
     return repositories, folder_structure
 
 
-# Function to extract tech stack information
 def extract_features(repo_path):
     features = {}
     files = os.listdir(repo_path)
@@ -45,6 +44,8 @@ def extract_features(repo_path):
         ".rs": "Rust",
         ".swift": "Swift",
         ".kt": "Kotlin",
+        ".yml": "YAML",
+        ".tf": "Terraform",
         ".yaml": "YAML",
         ".json": "JSON",
         ".md": "Markdown",
@@ -61,14 +62,16 @@ def extract_features(repo_path):
 
     for file in files:
         file_path = os.path.join(repo_path, file)
-        file_paths.append(file_path)
-        _, ext = os.path.splitext(file)
-        if ext in extensions:
-            languages.add(extensions[ext])
+        # Skip directories to avoid IsADirectoryError
+        if os.path.isfile(file_path):
+            file_paths.append(file_path)
+            _, ext = os.path.splitext(file)
+            if ext in extensions:
+                languages.add(extensions[ext])
 
     features["languages"] = ", ".join(languages)
 
-    # Detect dependencies from common files
+    # Detect dependencies (extended to detect Helm)
     dep_files = {
         "package.json": "Node.js",
         "requirements.txt": "Python",
@@ -78,16 +81,21 @@ def extract_features(repo_path):
         "Makefile": "Make",
         "composer.json": "PHP",
         "Cargo.toml": "Rust",
+        "Chart.yaml": "Helm",
+        "values.yaml": "Helm",
+        "Jenkinsfile": "Jenkins",
+        "main.tf": "Terraform",
+        "playbook.yaml": "Ansible",
     }
     dependencies = set()
 
-    for dep_file in dep_files:
+    for dep_file, dep_label in dep_files.items():
         if dep_file in files:
-            dependencies.add(dep_files[dep_file])
+            dependencies.add(dep_label)
 
     features["dependencies"] = ", ".join(dependencies)
 
-    # Extract summarized file contents
+    # Extract summarized file contents (only for actual files)
     features["contents"] = extract_summary(file_paths)
 
     return features
@@ -125,34 +133,44 @@ if repo_path and os.path.exists(repo_path):
 
         # Extracting features
         data = []
-        for repo in repositories:
-            repo_name = os.path.basename(repo)
-            features = extract_features(repo)
-            data.append({"repo": repo_name, **features})
+        with st.spinner("🔍 Extract Features..."):
+            for repo in repositories:
+                repo_name = os.path.basename(repo)
+                features = extract_features(repo)
+                data.append({"repo": repo_name, **features})
 
         df = pd.DataFrame(data)
 
         with st.spinner("📊 Analysing data..."):
-            st.dataframe(df.head(100))  # Only display first 50 rows to reduce data load
             # Additional Analytics
-            st.subheader("📊 Additional Insights")
+            st.subheader("📊 Repository Overview")
+            with st.expander("Repository Dataframe"):
+                st.dataframe(df.head(100))
 
-            lang_counts = df["languages"].str.split(", ").explode().value_counts()
-            fig_lang = px.pie(
-                values=lang_counts.values,
-                names=lang_counts.index,
-                title="Language Distribution",
-            )
-            st.plotly_chart(fig_lang, use_container_width=True)
+            # Layout columns for dataset stats
+            col1, col2 = st.columns(2)
 
-            dep_counts = df["dependencies"].str.split(", ").explode().value_counts()
-            fig_dep = px.bar(
-                x=dep_counts.index,
-                y=dep_counts.values,
-                title="Dependency Usage",
-                labels={"x": "Dependency", "y": "Count"},
-            )
-            st.plotly_chart(fig_dep, use_container_width=True)
+            with col1:
+                # Language Distribution
+                lang_counts = df["languages"].str.split(", ").explode().value_counts()
+                fig_lang = px.pie(
+                    values=lang_counts.values,
+                    names=lang_counts.index,
+                    title="Language Distribution",
+                )
+                st.plotly_chart(fig_lang, use_container_width=True)
+
+            with col2:
+                # Dependency Distribution (if available)
+                if "dependencies" in df.columns:
+                    dep_counts = df["dependencies"].str.split(", ").explode().value_counts()
+                    fig_dep = px.bar(
+                        x=dep_counts.index,
+                        y=dep_counts.values,
+                        title="Dependency Usage",
+                        labels={"x": "Dependency", "y": "Count"},
+                    )
+                    st.plotly_chart(fig_dep, use_container_width=True)
 
         with st.spinner("📊 Clustering repositories..."):
             # Convert text features to numeric
@@ -171,16 +189,19 @@ if repo_path and os.path.exists(repo_path):
                 kmeans.fit(reduced_features)
                 distortions.append(sum(np.min(cdist(reduced_features, kmeans.cluster_centers_, 'euclidean'), axis=1)) / reduced_features.shape[0])
 
-            # Plot elbow method
-            fig, ax = plt.subplots()
-            ax.plot(K, distortions, 'bo-')
-            ax.set_xlabel('Number of clusters')
-            ax.set_ylabel('Distortion')
-            ax.set_title('Elbow Method for Optimal k')
-            st.pyplot(fig)
+            with st.expander("📊 Elbow Method for Optimal k"):
+                # Plot elbow method
+                fig, ax = plt.subplots()
+                ax.plot(K, distortions, 'bo-')
+                ax.set_xlabel('Number of clusters')
+                ax.set_ylabel('Distortion')
+                ax.set_title('Elbow Method for Optimal k')
+                st.pyplot(fig)
 
             # Choose the best clustering method
-            clustering_method = st.selectbox("Choose clustering method:", ["KMeans", "DBSCAN"])
+            clustering_method = st.radio(
+                "Choose clustering method:", ["KMeans", "DBSCAN"]
+            )
 
             if clustering_method == "KMeans":
                 optimal_clusters = st.slider("Select number of clusters:", 2, 10, 5)
@@ -194,9 +215,16 @@ if repo_path and os.path.exists(repo_path):
             df['x'] = reduced_features[:, 0]
             df['y'] = reduced_features[:, 1]
 
-            # Visualization
-            fig = px.scatter(df, x='x', y='y', color=df['cluster'].astype(str), hover_data=['repo', 'languages', 'dependencies'], title="Repository Clusters")
+            # Scatter plot with repo names as labels
+            fig = px.scatter(df, x='x', y='y', color=df['cluster'].astype(str),
+                            hover_data=['repo', 'languages'], title="Repository Clusters",
+                            text=df['repo'])
+            fig.update_traces(textposition='top center')
             st.plotly_chart(fig, use_container_width=True)
+
+            # Visualization
+            # fig = px.scatter(df, x='x', y='y', color=df['cluster'].astype(str), hover_data=['repo', 'languages', 'dependencies'], title="Repository Clusters")
+            # st.plotly_chart(fig, use_container_width=True)
     else:
         st.write("❌ No repositories found.")
 else:
