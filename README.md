@@ -175,7 +175,7 @@ A reinforcement learning-based AI system that optimizes algorithmic strategies f
 
 Scans a directory containing multiple Git repositories, extracts code features (languages, dependencies, lines of code, etc.), and uses machine learning to cluster similar repositories.
 
-**Highlights**:
+🔹 Features:
 
 - Automatically detects `.git` folders.
 - Identifies programming languages based on file types.
