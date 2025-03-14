@@ -31,7 +31,6 @@ tabs = st.tabs(
         "🛠 Train AI Model",
         "🔮 Predict & Prioritize Orders",
         "🚀 Run Trading Simulation",
-        "👓 Meeting with Steve",
     ]
 )
 
@@ -393,10 +392,13 @@ with tabs[2]:
             # Display the modified DataFrame with renamed columns
             st.dataframe(df_display)
 
-        # Drop unnecessary columns dynamically
-        drop_cols = ["order_id", "arrival_time", "matched_time"]
-        X = df_train.drop(columns=drop_cols + ["fast_match"])
+        # Then define X, y
+        drop_cols = ["order_id", "arrival_time", "matched_time", "fast_match"]
+        X = df_train.drop(columns=drop_cols, errors="ignore")
         y = df_train["fast_match"]
+
+        # 🟢 Store the training column names for future re-indexing
+        st.session_state["train_columns"] = list(X.columns)
 
         # Train-test split
         X_train, X_test, y_train, y_test = train_test_split(
@@ -477,3 +479,109 @@ with tabs[2]:
             title="Feature Importance in Model",
         )
         st.plotly_chart(fig_importance, use_container_width=True)
+
+# ------------------------------------------------------------------------
+# 4) PREDICT & PRIORITIZE ORDERS
+# ------------------------------------------------------------------------
+with tabs[3]:
+    st.header("🔮 Predict & Prioritize Orders")
+
+    # Make sure the model is trained
+    if (
+        "trained_model" not in st.session_state
+        or st.session_state["trained_model"] is None
+    ):
+        st.error("No trained model found. Train the model first in '🛠 Train AI Model'.")
+        st.stop()
+
+    model_final, scaler = st.session_state["trained_model"]
+
+    # Ensure we have the training columns
+    if (
+        "train_columns" not in st.session_state
+        or st.session_state["train_columns"] is None
+    ):
+        st.error("No training columns found. Train the model first.")
+        st.stop()
+
+    train_cols = st.session_state["train_columns"]
+
+    st.sidebar.subheader("New Order Generation")
+    num_new_orders = st.sidebar.slider("Number of new orders", 10, 1000, 50)
+    seed_new = st.sidebar.number_input("New Data Seed", 1, 9999, 123)
+
+    if "df_new" not in st.session_state:
+        st.session_state["df_new"] = None
+
+    # Generate new unlabeled orders
+    if st.button("Generate New Orders"):
+        np.random.seed(seed_new)
+        random.seed(seed_new)
+
+        order_ids = np.arange(num_new_orders)
+        sides = np.random.choice(["BUY", "SELL"], size=num_new_orders)
+        tickers = np.random.choice(TICKERS, size=num_new_orders)
+        prices = np.random.normal(100, 15, size=num_new_orders).clip(1).round(2)
+        sizes = np.random.randint(1, 1000, size=num_new_orders)
+        base_time = datetime.now()
+        arrival_offsets = np.cumsum(np.random.randint(0, 5, num_new_orders))
+        arrival_times = [
+            base_time + timedelta(milliseconds=int(off)) for off in arrival_offsets
+        ]
+
+        df_new = pd.DataFrame(
+            {
+                "order_id": order_ids,
+                "side": sides,
+                "ticker": tickers,
+                "price": prices,
+                "size": sizes,
+                "arrival_time": arrival_times,
+            }
+        )
+
+        st.session_state["df_new"] = df_new
+        st.success("New unlabeled orders generated successfully!")
+
+    # If we have df_new, let's show and do "Predict & Prioritize"
+    if st.session_state["df_new"] is not None:
+        df_new = st.session_state["df_new"]
+        st.write("**Preview of newly generated unlabeled orders:**")
+        st.dataframe(df_new.head(20))
+
+        if st.button("Predict & Prioritize"):
+            # We'll do the same categorical encoding approach
+            df_infer = df_new.copy()
+
+            # Example: convert side/ticker via get_dummies
+            df_infer = pd.get_dummies(df_infer, columns=["side", "ticker"])
+
+            # Remove columns not used in training
+            drop_cols = ["order_id", "arrival_time"]
+            for c in drop_cols:
+                if c in df_infer.columns:
+                    df_infer.drop(c, axis=1, inplace=True)
+
+            # Reindex to match the columns used during training
+            df_infer = df_infer.reindex(columns=train_cols, fill_value=0)
+
+            X_infer_s = scaler.transform(df_infer)  # scale
+            match_probs = model_final.predict_proba(X_infer_s)[:, 1]
+            df_new["match_probability"] = match_probs
+
+            # Sort descending by match_probability => AI approach
+            df_ai_sorted = df_new.sort_values("match_probability", ascending=False)
+            # Also define FIFO approach => sorted by arrival_time
+            df_fifo_sorted = df_new.sort_values("arrival_time")
+
+            st.markdown("### AI-Prioritized Orders (Highest Probability First)")
+            st.dataframe(df_ai_sorted.head(20))
+
+            # Store them for next tab
+            st.session_state["df_fifo"] = df_fifo_sorted
+            st.session_state["df_ai"] = df_ai_sorted
+            st.success(
+                "Prioritization complete. Proceed to '🚀 Run Trading Simulation'!"
+            )
+    else:
+        st.info("Click 'Generate New Orders' to create a new unlabeled dataset.")
