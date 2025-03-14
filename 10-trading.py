@@ -232,8 +232,8 @@ with tabs[1]:
     # Ensure df_train always refers to session state data if it exists
     if st.session_state["training_data"] is not None:
         df_train = st.session_state["training_data"]
-        st.header("🔢 Historical data")
-        st.dataframe(df_train)
+        with st.expander("**🔢 Historical data**"):
+            st.dataframe(df_train)
     else:
         df_train = pd.DataFrame()  # Default empty DataFrame
 
@@ -352,46 +352,46 @@ with tabs[2]:
     with st.expander("**🔢 Historical data**"):
         st.dataframe(df_train)
 
-    # Convert time_to_match_ms to numeric
-    df_train["time_to_match_ms"] = df_train["time_to_match_ms"].apply(
-        lambda x: (
-            np.log1p(pd.to_timedelta(x).total_seconds() * 1000)
-            if x != "Unmatched"
-            else np.log1p(5000)
-        )
-    )
-
-    # Encode categorical features
-    encoder = OneHotEncoder(handle_unknown="ignore", sparse_output=False)
-    encoded_features = encoder.fit_transform(df_train[["side", "ticker"]])
-    encoded_df = pd.DataFrame(
-        encoded_features, columns=encoder.get_feature_names_out(["side", "ticker"])
-    )
-    df_train = df_train.join(encoded_df).drop(["side", "ticker"], axis=1)
-    
-    with st.expander("**🔢 Training Data Overview**"):
-        feature_cols = [col for col in df_train.columns if col not in ["fast_match", "order_id", "arrival_time", "matched_time"]]
-        target_col = "fast_match"
-
-        # Create a copy of the dataset
-        df_display = df_train.copy()
-
-        # Rename columns with emojis
-        renamed_columns = {
-            col: f"🔹 {col}" if col in feature_cols else 
-                f"🎯 {col}" if col == target_col else 
-                f"❌ {col}"
-            for col in df_train.columns
-        }
-
-        df_display = df_display.rename(columns=renamed_columns)
-
-        # Display the modified DataFrame with renamed columns
-        st.dataframe(df_display)
-
     if st.button("Train RandomForest model"):
         # Show initial message
         st.write("**Training RandomForest model...**")
+
+        # Convert time_to_match_ms to numeric
+        df_train["time_to_match_ms"] = df_train["time_to_match_ms"].apply(
+            lambda x: (
+                np.log1p(pd.to_timedelta(x).total_seconds() * 1000)
+                if x != "Unmatched"
+                else np.log1p(5000)
+            )
+        )
+
+        # Encode categorical features
+        encoder = OneHotEncoder(handle_unknown="ignore", sparse_output=False)
+        encoded_features = encoder.fit_transform(df_train[["side", "ticker"]])
+        encoded_df = pd.DataFrame(
+            encoded_features, columns=encoder.get_feature_names_out(["side", "ticker"])
+        )
+        df_train = df_train.join(encoded_df).drop(["side", "ticker"], axis=1)
+
+        with st.expander("**🔢 Training Data Overview**"):
+            feature_cols = [col for col in df_train.columns if col not in ["fast_match", "order_id", "arrival_time", "matched_time"]]
+            target_col = "fast_match"
+
+            # Create a copy of the dataset
+            df_display = df_train.copy()
+
+            # Rename columns with emojis
+            renamed_columns = {
+                col: f"🔹 {col}" if col in feature_cols else
+                    f"🎯 {col}" if col == target_col else
+                    f"❌ {col}"
+                for col in df_train.columns
+            }
+
+            df_display = df_display.rename(columns=renamed_columns)
+
+            # Display the modified DataFrame with renamed columns
+            st.dataframe(df_display)
 
         # Drop unnecessary columns dynamically
         drop_cols = ["order_id", "arrival_time", "matched_time"]
