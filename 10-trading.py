@@ -197,6 +197,11 @@ def generate_labeled_orders(
 
     return df
 
+st.sidebar.header("Data Generation Controls")
+n_orders = st.sidebar.slider("Number of orders to generate", 10, 2000, 100)
+seed_val = st.sidebar.number_input("Random seed", 1, 9999, 42)
+label_noise = st.sidebar.slider("Label Noise fraction", 0.0, 0.5, 0.1)
+
 # ------------------------------------------------------------------------
 # 1) HOME
 # ------------------------------------------------------------------------
@@ -220,12 +225,19 @@ with tabs[0]:
 # 2) GENERATE DATA
 # ------------------------------------------------------------------------
 with tabs[1]:
-    st.header("📦 Generate Historical Data")
 
-    st.sidebar.header("Data Generation Controls")
-    n_orders = st.sidebar.slider("Number of orders to generate", 10, 2000, 100)
-    seed_val = st.sidebar.number_input("Random seed", 1, 9999, 42)
-    label_noise = st.sidebar.slider("Label Noise fraction", 0.0, 0.5, 0.1)
+    if "training_data" not in st.session_state:
+        st.session_state["training_data"] = None  # Ensure key exists
+
+    # Ensure df_train always refers to session state data if it exists
+    if st.session_state["training_data"] is not None:
+        df_train = st.session_state["training_data"]
+        st.header("🔢 Historical data")
+        st.dataframe(df_train)
+    else:
+        df_train = pd.DataFrame()  # Default empty DataFrame
+
+    st.header("📦 Generate Historical Data")
 
     # match_time_threshold = st.sidebar.slider("Match Time Threshold", 1, 100, 10)
     threshold_ms = st.slider("Fast-match threshold (ms)", 1, 100, 10)
@@ -337,27 +349,49 @@ with tabs[2]:
         st.stop()
 
     df_train = st.session_state["training_data"]
+    with st.expander("**🔢 Historical data**"):
+        st.dataframe(df_train)
+
+    # Convert time_to_match_ms to numeric
+    df_train["time_to_match_ms"] = df_train["time_to_match_ms"].apply(
+        lambda x: (
+            np.log1p(pd.to_timedelta(x).total_seconds() * 1000)
+            if x != "Unmatched"
+            else np.log1p(5000)
+        )
+    )
+
+    # Encode categorical features
+    encoder = OneHotEncoder(handle_unknown="ignore", sparse_output=False)
+    encoded_features = encoder.fit_transform(df_train[["side", "ticker"]])
+    encoded_df = pd.DataFrame(
+        encoded_features, columns=encoder.get_feature_names_out(["side", "ticker"])
+    )
+    df_train = df_train.join(encoded_df).drop(["side", "ticker"], axis=1)
+    
+    with st.expander("**🔢 Training Data Overview**"):
+        feature_cols = [col for col in df_train.columns if col not in ["fast_match", "order_id", "arrival_time", "matched_time"]]
+        target_col = "fast_match"
+
+        # Create a copy of the dataset
+        df_display = df_train.copy()
+
+        # Rename columns with emojis
+        renamed_columns = {
+            col: f"🔹 {col}" if col in feature_cols else 
+                f"🎯 {col}" if col == target_col else 
+                f"❌ {col}"
+            for col in df_train.columns
+        }
+
+        df_display = df_display.rename(columns=renamed_columns)
+
+        # Display the modified DataFrame with renamed columns
+        st.dataframe(df_display)
 
     if st.button("Train RandomForest model"):
         # Show initial message
         st.write("**Training RandomForest model...**")
-
-        # Convert time_to_match_ms to numeric
-        df_train["time_to_match_ms"] = df_train["time_to_match_ms"].apply(
-            lambda x: (
-                np.log1p(pd.to_timedelta(x).total_seconds() * 1000)
-                if x != "Unmatched"
-                else np.log1p(5000)
-            )
-        )
-
-        # Encode categorical features
-        encoder = OneHotEncoder(handle_unknown="ignore", sparse_output=False)
-        encoded_features = encoder.fit_transform(df_train[["side", "ticker"]])
-        encoded_df = pd.DataFrame(
-            encoded_features, columns=encoder.get_feature_names_out(["side", "ticker"])
-        )
-        df_train = df_train.join(encoded_df).drop(["side", "ticker"], axis=1)
 
         # Drop unnecessary columns dynamically
         drop_cols = ["order_id", "arrival_time", "matched_time"]
