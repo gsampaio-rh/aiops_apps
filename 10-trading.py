@@ -237,23 +237,82 @@ with tabs[1]:
         st.session_state["training_data"] = df_train
 
         # Convert milliseconds to formatted time (HH:MM:SS.sss)
+        df_train["arrival_time"] = pd.to_datetime(df_train["arrival_time"])
+        df_train["matched_time"] = pd.to_datetime(df_train["matched_time"], errors="coerce")
+
         df_train["time_to_match_ms"] = df_train["time_to_match_ms"].apply(
-            lambda x: (str(timedelta(milliseconds=x)) if x >= 0 else "Unmatched")
+            lambda x: f"{x/1000:.3f} sec" if x >= 0 else "Unmatched"
         )
 
-        st.write("**Historical data (head)**:")
-        st.dataframe(df_train)
+        df_filtered = df_train[df_train["time_to_match_ms"] != "Unmatched"].copy()
+        df_filtered["time_to_match_ms"] = (
+            df_filtered["time_to_match_ms"].str.replace(" sec", "").astype(float)
+        )
 
-        # Optional: Show any data pattern or threshold-based charts here
-        st.subheader("Visualizing Data Patterns")
+        with st.expander("**🔢 Historical data**"):
+            st.dataframe(df_train)
+
+        st.subheader("📈 Summary Statistics")
+
+        # Define column layout for better readability
+        col1, col2, col3 = st.columns(3)
+
+        # Compute required statistics
+        num_orders = len(df_train)
+        num_unmatched = df_train['time_to_match_ms'].eq("Unmatched").sum()
+        fast_match_rate = df_train['fast_match'].mean() * 100
+        median_time_to_match = df_filtered['time_to_match_ms'].median()
+        avg_time_to_match = df_filtered['time_to_match_ms'].mean()
+        max_time_to_match = df_filtered['time_to_match_ms'].max()
+        min_time_to_match = df_filtered['time_to_match_ms'].min()
+        avg_order_price = df_train["price"].mean()
+        avg_order_size = df_train["size"].mean()
+
+        # Display statistics in columns
+        with col1:
+            st.metric(label="📊 Total Orders", value=num_orders)
+            st.metric(label="📉 Unmatched Orders", value=num_unmatched)
+            st.metric(label="⏳ Min Time to Match (sec)", value=f"{min_time_to_match:.3f}")
+
+        with col2:
+            st.metric(label="⚡ Fast Match Rate (%)", value=f"{fast_match_rate:.2f}%")
+            st.metric(label="📈 Median Time to Match (sec)", value=f"{median_time_to_match:.3f}")
+            st.metric(label="⏱️ Max Time to Match (sec)", value=f"{max_time_to_match:.3f}")
+
+        with col3:
+            st.metric(label="💰 Average Order Price ($)", value=f"{avg_order_price:.2f}")
+            st.metric(label="📦 Average Order Size", value=f"{avg_order_size:.1f}")
+            st.metric(label="⌛ Average Time to Match (sec)", value=f"{avg_time_to_match:.3f}")
+
+        st.subheader("📊 Price vs. Time to Match")
+
+        # Convert 'time_to_match_ms' to numerical format, excluding unmatched values
+        df_filtered = df_train[df_train["time_to_match_ms"] != "Unmatched"].copy()
+        df_filtered["time_to_match_ms"] = df_filtered["time_to_match_ms"].str.replace(" sec", "").astype(float)
+
+        # Create the scatter plot with a better color scale
         fig_pattern = px.scatter(
-            df_train,
+            df_filtered,
             x="price",
             y="time_to_match_ms",
             color="fast_match",
             hover_data=["order_id", "side", "size", "ticker"],
-            title="Historical Data: Price vs. time_to_match_ms",
+            title="Historical Data: Price vs. Time to Match",
+            labels={"time_to_match_ms": "Time to Match (Seconds)"},
+            color_continuous_scale="viridis",  # Change color scale (options: "viridis", "plasma", "cividis", "magma", "coolwarm")
         )
+
+        # Improve marker visibility
+        fig_pattern.update_traces(marker=dict(size=8, opacity=0.7, line=dict(width=1, color='black')))
+
+        # Adjust layout for better readability
+        fig_pattern.update_layout(
+            xaxis_title="Price ($)",
+            yaxis_title="Time to Match (Seconds)",
+            coloraxis_colorbar=dict(title="Fast Match Probability"),
+            template="plotly_white"
+        )
+
         st.plotly_chart(fig_pattern, use_container_width=True)
 
     else:
