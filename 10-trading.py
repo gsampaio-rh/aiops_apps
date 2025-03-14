@@ -2,13 +2,16 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import random
-import time
+import time    
 from datetime import datetime, timedelta
 import plotly.express as px
 import plotly.graph_objects as go
-from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import OneHotEncoder
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import StratifiedKFold
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 
 
 # ------------------------------------------------------------------------
@@ -335,73 +338,101 @@ with tabs[2]:
 
     df_train = st.session_state["training_data"]
 
-    st.write("**Using the existing historical dataset**:")
-    st.dataframe(df_train.head(10))
+    if st.button("Train RandomForest model"):
+        # Show initial message
+        st.write("**Training RandomForest model...**")
 
-    # If needed, do dummies etc.
-    st.write("**Training RandomForest model...**")
-    progress_bar = st.progress(0)
-    status_text = st.empty()
-
-    # Convert time_to_match_ms to numeric (keeping unmatched as -1)
-    df_train["time_to_match_ms"] = df_train["time_to_match_ms"].apply(
-        lambda x: pd.to_timedelta(x).total_seconds() * 1000 if x != "Unmatched" else -1
-    )
-
-    # Re-encode categorical columns
-    df_enc = pd.get_dummies(df_train, columns=["side", "ticker"])
-
-    # Drop unnecessary columns (including datetime ones)
-    X = df_enc.drop(["order_id", "fast_match", "arrival_time", "matched_time"], axis=1)
-    y = df_enc["fast_match"]
-
-    # Train/test split
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-    scaler = StandardScaler()
-    X_train_s = scaler.fit_transform(X_train)  # <-- No more conversion errors
-    X_test_s = scaler.transform(X_test)
-
-    n_iters = 10
-    iteration_accuracies = []
-    model_final = None
-
-    for i in range(n_iters):
-        subset_indices = np.random.choice(
-            len(X_train_s), size=int(0.8 * len(X_train_s)), replace=False
+        # Convert time_to_match_ms to numeric
+        df_train["time_to_match_ms"] = df_train["time_to_match_ms"].apply(
+            lambda x: (
+                np.log1p(pd.to_timedelta(x).total_seconds() * 1000)
+                if x != "Unmatched"
+                else np.log1p(5000)
+            )
         )
-        X_sub = X_train_s[subset_indices]
-        y_sub = y_train.iloc[subset_indices]
 
-        model = RandomForestClassifier(n_estimators=50, random_state=(42 + i))
-        model.fit(X_sub, y_sub)
-
-        test_acc = model.score(X_test_s, y_test)
-        iteration_accuracies.append(test_acc)
-
-        progress_bar.progress(int(100 * (i + 1) / n_iters))
-        status_text.text(
-            f"Iteration {i+1}/{n_iters} - Test Accuracy: {test_acc*100:.2f}%"
+        # Encode categorical features
+        encoder = OneHotEncoder(handle_unknown="ignore", sparse_output=False)
+        encoded_features = encoder.fit_transform(df_train[["side", "ticker"]])
+        encoded_df = pd.DataFrame(
+            encoded_features, columns=encoder.get_feature_names_out(["side", "ticker"])
         )
-        time.sleep(0.2)
+        df_train = df_train.join(encoded_df).drop(["side", "ticker"], axis=1)
 
-        model_final = model
+        # Drop unnecessary columns dynamically
+        drop_cols = ["order_id", "arrival_time", "matched_time"]
+        X = df_train.drop(columns=drop_cols + ["fast_match"])
+        y = df_train["fast_match"]
 
-    # Store final
-    st.session_state["trained_model"] = (model_final, scaler)
+        # Train-test split
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=0.2, stratify=y, random_state=42
+        )
 
-    st.write("**Final model training complete**")
+        # Standardize numeric features
+        scaler = StandardScaler()
+        X_train_s = scaler.fit_transform(X_train)
+        X_test_s = scaler.transform(X_test)
 
-    # Show iteration chart
-    st.subheader("Training Progress Chart")
-    df_iters = pd.DataFrame(
-        {"iteration": range(1, n_iters + 1), "test_acc": iteration_accuracies}
-    )
-    fig_iters = px.line(
-        df_iters,
-        x="iteration",
-        y="test_acc",
-        markers=True,
-        title="Test Accuracy Over Iterations",
-    )
-    st.plotly_chart(fig_iters, use_container_width=True)
+        start_time = time.time()
+        st.spinner("Training in progress...")
+
+        skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+        model_final = RandomForestClassifier(n_estimators=100, random_state=42)
+
+        accuracies, precisions, recalls, f1s = [], [], [], []
+
+        for train_idx, val_idx in skf.split(X_train_s, y_train):
+            model_final.fit(X_train_s[train_idx], y_train.iloc[train_idx])
+            y_pred = model_final.predict(X_train_s[val_idx])
+
+            accuracies.append(accuracy_score(y_train.iloc[val_idx], y_pred))
+            precisions.append(precision_score(y_train.iloc[val_idx], y_pred))
+            recalls.append(recall_score(y_train.iloc[val_idx], y_pred))
+            f1s.append(f1_score(y_train.iloc[val_idx], y_pred))
+
+        # Store final trained model
+        st.session_state["trained_model"] = (model_final, scaler)
+
+        # Show final training time
+        end_time = time.time()
+        training_duration = end_time - start_time
+        st.success(f"**Final model training complete in {training_duration:.2f} seconds!**")
+
+        # Summary stats
+        st.subheader("📈 Model Performance Metrics")
+
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("⚡ Accuracy", f"{np.mean(accuracies) * 100:.2f}%")
+        col2.metric("🎯 Precision", f"{np.mean(precisions) * 100:.2f}%")
+        col3.metric("🔄 Recall", f"{np.mean(recalls) * 100:.2f}%")
+        col4.metric("📊 F1 Score", f"{np.mean(f1s) * 100:.2f}%")
+
+        # Show iteration chart
+        st.subheader("📉 Training Progress Chart")
+        df_iters = pd.DataFrame(
+            {"Iteration": range(1, len(accuracies) + 1), "Test Accuracy": accuracies}
+        )
+        fig_iters = px.line(
+            df_iters,
+            x="Iteration",
+            y="Test Accuracy",
+            markers=True,
+            title="Test Accuracy Over Cross-Validation Iterations",
+        )
+        st.plotly_chart(fig_iters, use_container_width=True)
+
+        # Feature Importance Chart
+        st.subheader("📊 Feature Importance")
+        feature_importances = pd.DataFrame(
+            {"Feature": X.columns, "Importance": model_final.feature_importances_}
+        ).sort_values(by="Importance", ascending=False)
+
+        fig_importance = px.bar(
+            feature_importances,
+            x="Importance",
+            y="Feature",
+            orientation="h",
+            title="Feature Importance in Model",
+        )
+        st.plotly_chart(fig_importance, use_container_width=True)
