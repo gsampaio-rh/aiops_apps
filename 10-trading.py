@@ -617,7 +617,6 @@ with tabs[4]:
         st.session_state["fifo_executed"] = []
         st.session_state["ai_executed"] = []
 
-    
     # Execution Logic
     def execute_orders(order_list, mode="FIFO"):
         executed_orders = []
@@ -731,3 +730,214 @@ with tabs[4]:
                 {"execution_time": lambda t: t.strftime("%H:%M:%S.%f")}
             )
         )
+
+# with tabs[5]:
+#     st.header("🚀 AI vs. FIFO Trading Simulation")
+
+#     st.markdown(
+#         """
+
+#     In this simulation, we compare two different strategies for executing orders in a **live limit order book**:
+
+#     1. **FIFO Execution (First-In-First-Out)**  
+#        - Orders are processed **strictly in the order they arrive**, without considering their likelihood of getting matched quickly.  
+#        - This is the traditional method used in many markets.  
+
+#     2. **AI-Prioritized Execution**  
+#        - Orders are **ranked based on AI predictions** of how likely they are to be matched quickly.  
+#        - Orders with **higher match probability** are **executed first**, regardless of their arrival time.  
+
+#     ### 📌 What is a "Fill" in Trading?  
+#     - A **fill** occurs when an order is **matched with an opposite-side order** in the order book and executed.  
+#     - Example:  
+#       - A **BUY** order at $100 finds a **SELL** order at $100 → ✅ **Filled!**  
+#       - A **BUY** order at $95 but the lowest **SELL** order is $100 → ❌ **Not filled (waiting).**  
+
+#     ### 🏆 What are we measuring?  
+#     We compare these two approaches based on:
+#     ✅ **Total number of executed orders** (Did AI help more orders get filled?)  
+#     ⏳ **Execution speed** (Did AI execution complete orders faster than FIFO?)  
+#     📉 **Time efficiency** (Did AI reduce waiting time in the order book?)  
+
+#     The goal is to see whether **AI-based order prioritization** improves overall execution efficiency compared to the traditional FIFO approach! 🚀📈
+#     """
+#     )
+
+#     partial_fill = st.checkbox("Allow Partial Fills?", True)
+
+#     # Ensure data exists
+#     if "df_fifo" not in st.session_state or "df_ai" not in st.session_state:
+#         st.error(
+#             "No new orders to simulate. Run '🔮 Predict & Prioritize Orders' first."
+#         )
+#         st.stop()
+
+#     df_fifo = st.session_state["df_fifo"].copy()
+#     df_ai = st.session_state["df_ai"].copy()
+
+#     # Ensure `basic_order_book_engine()` is available
+#     def basic_order_book_engine(df_orders, partial_fill=True):
+#         """
+#         Simulates a toy order matching engine.
+#         - Matches BUY orders with SELL orders at the best available prices.
+#         - If `partial_fill=True`, orders can be partially filled.
+#         """
+#         buy_orders = []
+#         sell_orders = []
+#         filled_orders = []
+
+#         for (
+#             _,
+#             order,
+#         ) in df_orders.iterrows():  # ✅ Use iterrows() instead of itertuples()
+#             if order["side"] == "BUY":
+#                 while sell_orders and order["price"] >= sell_orders[0]["price"]:
+#                     match = sell_orders.pop(0)
+#                     fill_size = min(order["size"], match["size"])
+#                     filled_orders.append(
+#                         {
+#                             "order_id": order["order_id"],
+#                             "side": "BUY",
+#                             "price": match["price"],
+#                             "size": fill_size,
+#                         }
+#                     )
+#                     order[
+#                         "size"
+#                     ] -= fill_size  # ✅ Now it modifies a dictionary key instead of an immutable tuple
+#                     if order["size"] <= 0:
+#                         break
+#                 if order["size"] > 0:
+#                     buy_orders.append(
+#                         {
+#                             "order_id": order["order_id"],
+#                             "side": "BUY",
+#                             "price": order["price"],
+#                             "size": order["size"],
+#                         }
+#                     )
+
+#             elif order["side"] == "SELL":
+#                 while buy_orders and order["price"] <= buy_orders[0]["price"]:
+#                     match = buy_orders.pop(0)
+#                     fill_size = min(order["size"], match["size"])
+#                     filled_orders.append(
+#                         {
+#                             "order_id": order["order_id"],
+#                             "side": "SELL",
+#                             "price": match["price"],
+#                             "size": fill_size,
+#                         }
+#                     )
+#                     order[
+#                         "size"
+#                     ] -= fill_size  # ✅ Now it modifies a dictionary key instead of an immutable tuple
+#                     if order["size"] <= 0:
+#                         break
+#                 if order["size"] > 0:
+#                     sell_orders.append(
+#                         {
+#                             "order_id": order["order_id"],
+#                             "side": "SELL",
+#                             "price": order["price"],
+#                             "size": order["size"],
+#                         }
+#                     )
+
+#         return pd.DataFrame(filled_orders)
+
+#     # Run Simulation
+#     if st.button("Run Trading Simulation Now!"):
+#         fill_counts_fifo = []
+#         all_fills_fifo = pd.DataFrame()
+#         cumulative_orders_fifo = []
+
+#         # FIFO Order Processing
+#         for i, row in enumerate(df_fifo.itertuples()):
+#             time.sleep(0.000005)  # Simulate micro-latency
+#             cumulative_orders_fifo.append(
+#                 {
+#                     "order_id": row.order_id,
+#                     "side": row.side,
+#                     "price": row.price,
+#                     "size": row.size,
+#                 }
+#             )
+#             df_co = pd.DataFrame(cumulative_orders_fifo)
+#             fill_df = basic_order_book_engine(df_co, partial_fill=partial_fill)
+#             fill_counts_fifo.append(len(fill_df))
+#             if i == len(df_fifo) - 1:
+#                 all_fills_fifo = fill_df
+
+#         # AI Order Processing
+#         fill_counts_ai = []
+#         all_fills_ai = pd.DataFrame()
+#         cumulative_orders_ai = []
+#         for i, row in enumerate(df_ai.itertuples()):
+#             time.sleep(0.000005)
+#             cumulative_orders_ai.append(
+#                 {
+#                     "order_id": row.order_id,
+#                     "side": row.side,
+#                     "price": row.price,
+#                     "size": row.size,
+#                 }
+#             )
+#             df_co_ai = pd.DataFrame(cumulative_orders_ai)
+#             fill_df_ai = basic_order_book_engine(df_co_ai, partial_fill=partial_fill)
+#             fill_counts_ai.append(len(fill_df_ai))
+#             if i == len(df_ai) - 1:
+#                 all_fills_ai = fill_df_ai
+
+#         # Compare AI vs FIFO Performance
+#         df_compare = pd.DataFrame(
+#             {
+#                 "num_orders_processed": range(1, len(df_fifo) + 1),
+#                 "fills_fifo": fill_counts_fifo,
+#                 "fills_ai": fill_counts_ai,
+#             }
+#         )
+
+#         st.subheader("📈 Cumulative Fill Events vs. Orders Processed")
+#         fig_line = go.Figure()
+#         fig_line.add_trace(
+#             go.Scatter(
+#                 x=df_compare["num_orders_processed"],
+#                 y=df_compare["fills_fifo"],
+#                 mode="lines+markers",
+#                 name="FIFO Execution",
+#                 line=dict(color="red"),
+#             )
+#         )
+#         fig_line.add_trace(
+#             go.Scatter(
+#                 x=df_compare["num_orders_processed"],
+#                 y=df_compare["fills_ai"],
+#                 mode="lines+markers",
+#                 name="AI Execution",
+#                 line=dict(color="blue"),
+#             )
+#         )
+#         fig_line.update_layout(
+#             title="Cumulative Fill Events vs. Number of Orders Processed",
+#             xaxis_title="Orders Processed",
+#             yaxis_title="Total Fills",
+#             template="plotly_white",
+#         )
+#         st.plotly_chart(fig_line, use_container_width=True)
+
+#         # Display final results
+#         final_fifo_fills = df_compare["fills_fifo"].iloc[-1]
+#         final_ai_fills = df_compare["fills_ai"].iloc[-1]
+
+#         st.write(
+#             f"**Final Fill Count**: FIFO = {final_fifo_fills}, AI = {final_ai_fills}"
+#         )
+
+#         with st.expander("📋 Show FIFO Fill Events"):
+#             st.dataframe(all_fills_fifo)
+#         with st.expander("📋 Show AI Fill Events"):
+#             st.dataframe(all_fills_ai)
+
+#     else:
+#         st.info("Press the button above to run the toy simulation.")
