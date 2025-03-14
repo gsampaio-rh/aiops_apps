@@ -234,21 +234,110 @@ with tabs[1]:
         )
         st.session_state["training_data"] = df_train
 
+        # Convert milliseconds to formatted time (HH:MM:SS.sss)
+        df_train["time_to_match_ms"] = df_train["time_to_match_ms"].apply(
+            lambda x: (str(timedelta(milliseconds=x)) if x >= 0 else "Unmatched")
+        )
+
         st.write("**Historical data (head)**:")
         st.dataframe(df_train)
 
         # Optional: Show any data pattern or threshold-based charts here
-        # st.subheader("Visualizing Data Patterns")
-        # # Example: Price vs. match_process_time
-        # fig_pattern = px.scatter(
-        #     df_train,
-        #     x="price",
-        #     y="time_to_match_ms",  # if you're using match_process_time
-        #     color="fast_match",
-        #     hover_data=["ticker", "side", "size"],
-        #     title="Historical Data: Price vs. Match Process Time",
-        # )
-        # st.plotly_chart(fig_pattern, use_container_width=True)
+        st.subheader("Visualizing Data Patterns")
+        fig_pattern = px.scatter(
+            df_train,
+            x="price",
+            y="time_to_match_ms",
+            color="fast_match",
+            hover_data=["order_id", "side", "size"],
+            title="Historical Data: Price vs. time_to_match_ms",
+        )
+        st.plotly_chart(fig_pattern, use_container_width=True)
 
     else:
         st.info("Click 'Generate Historical Data' to create a new dataset.")
+
+
+# ------------------------------------------------------------------------
+# 3) TRAIN AI MODEL
+# ------------------------------------------------------------------------
+# with tabs[2]:
+#     st.header("🛠 Train AI Model")
+
+#     if (
+#         "training_data" not in st.session_state
+#         or st.session_state["training_data"] is None
+#     ):
+#         st.error(
+#             "No historical data found. Please generate data in 'Generate Historical Data' tab first."
+#         )
+#         st.stop()
+
+#     df_train = st.session_state["training_data"]
+
+#     st.write("**Using the existing historical dataset**:")
+#     st.dataframe(df_train.head(10))
+
+#     # If needed, do dummies etc.
+#     st.write("**Training RandomForest model...**")
+#     progress_bar = st.progress(0)
+#     status_text = st.empty()
+
+#     # Example: same approach to encode & train
+#     df_enc = pd.get_dummies(df_train, columns=["side", "ticker"])
+#     X = df_enc.drop(
+#         ["order_id", "fast_match"], axis=1
+#     )  # or match_process_time if you keep it as a feature
+#     y = df_enc["fast_match"]
+
+#     # Train/test split
+#     X_train, X_test, y_train, y_test = train_test_split(
+#         X, y, test_size=0.2, random_state=42
+#     )
+#     scaler = StandardScaler()
+#     X_train_s = scaler.fit_transform(X_train)
+#     X_test_s = scaler.transform(X_test)
+
+#     n_iters = 10
+#     iteration_accuracies = []
+#     model_final = None
+
+#     for i in range(n_iters):
+#         subset_indices = np.random.choice(
+#             len(X_train_s), size=int(0.8 * len(X_train_s)), replace=False
+#         )
+#         X_sub = X_train_s[subset_indices]
+#         y_sub = y_train.iloc[subset_indices]
+
+#         model = RandomForestClassifier(n_estimators=50, random_state=(42 + i))
+#         model.fit(X_sub, y_sub)
+
+#         test_acc = model.score(X_test_s, y_test)
+#         iteration_accuracies.append(test_acc)
+
+#         progress_bar.progress(int(100 * (i + 1) / n_iters))
+#         status_text.text(
+#             f"Iteration {i+1}/{n_iters} - Test Accuracy: {test_acc*100:.2f}%"
+#         )
+#         time.sleep(0.2)
+
+#         model_final = model
+
+#     # Store final
+#     st.session_state["trained_model"] = (model_final, scaler)
+
+#     st.write("**Final model training complete**")
+
+#     # Show iteration chart
+#     st.subheader("Training Progress Chart")
+#     df_iters = pd.DataFrame(
+#         {"iteration": range(1, n_iters + 1), "test_acc": iteration_accuracies}
+#     )
+#     fig_iters = px.line(
+#         df_iters,
+#         x="iteration",
+#         y="test_acc",
+#         markers=True,
+#         title="Test Accuracy Over Iterations",
+#     )
+#     st.plotly_chart(fig_iters, use_container_width=True)
