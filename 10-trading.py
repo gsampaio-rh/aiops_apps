@@ -38,6 +38,85 @@ tabs = st.tabs(
 TICKERS = ["AAPL", "TSLA", "MSFT", "AMZN", "GOOG", "META", "NVDA", "NFLX"]
 
 
+# ------------------------------------------------------------------------
+# 0) HELPER FUNCTIONS & DATA GENERATION
+# ------------------------------------------------------------------------
+def basic_order_book_engine(orders, partial_fill=True):
+    """
+    A small, simplistic limit order book engine.
+    BUY orders: stored descending by price
+    SELL orders: stored ascending by price
+    If partial_fill=True, an order can match multiple opposing orders.
+    Returns a DataFrame of fill events.
+    """
+    buy_book = []
+    sell_book = []
+    fills = []
+
+    def insert_buy(b):
+        buy_book.append(b)
+        buy_book.sort(key=lambda x: x[0], reverse=True)
+
+    def insert_sell(s):
+        sell_book.append(s)
+        sell_book.sort(key=lambda x: x[0])
+
+    for row in orders.itertuples():
+        side = row.side
+        price = row.price
+        size = row.size
+        oid = row.order_id
+
+        if side == "BUY":
+            while size > 0 and len(sell_book) > 0 and price >= sell_book[0][0]:
+                best_sell_price, best_sell_size, best_sell_oid = sell_book[0]
+                fill_sz = min(size, best_sell_size)
+                fills.append(
+                    {
+                        "buy_order_id": oid,
+                        "sell_order_id": best_sell_oid,
+                        "price": best_sell_price,
+                        "size": fill_sz,
+                    }
+                )
+                size -= fill_sz
+                best_sell_size -= fill_sz
+                if best_sell_size <= 0:
+                    sell_book.pop(0)
+                else:
+                    sell_book[0] = (best_sell_price, best_sell_size, best_sell_oid)
+                if not partial_fill:
+                    size = 0
+                    break
+            if size > 0:
+                insert_buy((price, size, oid))
+        else:  # SELL
+            while size > 0 and len(buy_book) > 0 and price <= buy_book[0][0]:
+                best_buy_price, best_buy_size, best_buy_oid = buy_book[0]
+                fill_sz = min(size, best_buy_size)
+                fills.append(
+                    {
+                        "buy_order_id": best_buy_oid,
+                        "sell_order_id": oid,
+                        "price": best_buy_price,
+                        "size": fill_sz,
+                    }
+                )
+                size -= fill_sz
+                best_buy_size -= fill_sz
+                if best_buy_size <= 0:
+                    buy_book.pop(0)
+                else:
+                    buy_book[0] = (best_buy_price, best_buy_size, best_buy_oid)
+                if not partial_fill:
+                    size = 0
+                    break
+            if size > 0:
+                insert_sell((price, size, oid))
+
+    return pd.DataFrame(fills)
+
+
 def generate_labeled_orders(
     n_orders=100, seed_val=42, label_noise=0.1, threshold_ms=10
 ):
@@ -585,3 +664,129 @@ with tabs[3]:
             )
     else:
         st.info("Click 'Generate New Orders' to create a new unlabeled dataset.")
+
+# ------------------------------------------------------------------------
+# 5) RUN TRADING SIMULATION
+# ------------------------------------------------------------------------
+with tabs[4]:
+    st.header("🚀 Trading Simulation")
+
+    st.markdown(
+        """
+        Now we'll insert these **new orders** into a limit order book in two ways:
+        1. **FIFO**: By arrival time.
+        2. **AI**: By descending match_probability.
+
+        Then we measure how many fill events occur as each batch of orders is processed.
+        """,
+        unsafe_allow_html=True,
+    )
+
+    partial_fill = st.checkbox("Allow Partial Fills?", True)
+
+    if ("df_fifo" not in st.session_state) or ("df_ai" not in st.session_state):
+        st.error(
+            "No new orders to simulate. Please go to the 'Predict & Prioritize Orders' tab first."
+        )
+        st.stop()
+
+    df_fifo = st.session_state["df_fifo"].copy()
+    df_ai = st.session_state["df_ai"].copy()
+
+    # The function 'basic_order_book_engine(df, partial_fill)' is assumed
+    # to exist in your code, simulating a small LOB approach.
+
+    if st.button("Run Trading Simulation Now!"):
+        fill_counts_fifo = []
+        all_fills_fifo = pd.DataFrame()
+        cumulative_orders_fifo = []
+
+        # ----- FIFO approach -----
+        for i, row in enumerate(df_fifo.itertuples()):
+            time.sleep(0.000005)  # micro-latency
+            cumulative_orders_fifo.append(
+                {
+                    "order_id": row.order_id,
+                    "side": row.side,
+                    "price": row.price,
+                    "size": row.size,
+                }
+            )
+            # Convert list of dicts to DataFrame for each step
+            df_co = pd.DataFrame(cumulative_orders_fifo)
+            # Pass to your limit order book engine
+            fill_df = basic_order_book_engine(df_co, partial_fill=partial_fill)
+            fill_counts_fifo.append(len(fill_df))
+
+            if i == len(df_fifo) - 1:
+                all_fills_fifo = fill_df
+
+        # ----- AI approach -----
+        fill_counts_ai = []
+        all_fills_ai = pd.DataFrame()
+        cumulative_orders_ai = []
+
+        for i, row in enumerate(df_ai.itertuples()):
+            time.sleep(0.000005)
+            cumulative_orders_ai.append(
+                {
+                    "order_id": row.order_id,
+                    "side": row.side,
+                    "price": row.price,
+                    "size": row.size,
+                }
+            )
+            df_co_ai = pd.DataFrame(cumulative_orders_ai)
+            fill_df_ai = basic_order_book_engine(df_co_ai, partial_fill=partial_fill)
+            fill_counts_ai.append(len(fill_df_ai))
+
+            if i == len(df_ai) - 1:
+                all_fills_ai = fill_df_ai
+
+        # Compare results
+        df_compare = pd.DataFrame(
+            {
+                "num_orders_processed": range(1, len(df_fifo) + 1),
+                "fills_fifo": fill_counts_fifo,
+                "fills_ai": fill_counts_ai,
+            }
+        )
+
+        st.subheader("Cumulative Fill Events vs. Orders Processed")
+        fig_line = go.Figure()
+        fig_line.add_trace(
+            go.Scatter(
+                x=df_compare["num_orders_processed"],
+                y=df_compare["fills_fifo"],
+                mode="lines+markers",
+                name="FIFO",
+            )
+        )
+        fig_line.add_trace(
+            go.Scatter(
+                x=df_compare["num_orders_processed"],
+                y=df_compare["fills_ai"],
+                mode="lines+markers",
+                name="AI Priority",
+            )
+        )
+        fig_line.update_layout(
+            title="Cumulative Fill Events vs. Number of Orders Processed",
+            xaxis_title="Orders Processed",
+            yaxis_title="Total Fills",
+        )
+        st.plotly_chart(fig_line, use_container_width=True)
+
+        final_fifo_fills = df_compare["fills_fifo"].iloc[-1]
+        final_ai_fills = df_compare["fills_ai"].iloc[-1]
+        st.markdown(
+            f"**Final Fill Count**: FIFO = {final_fifo_fills}, AI = {final_ai_fills}"
+        )
+
+        with st.expander("Show FIFO Fill Events"):
+            st.dataframe(all_fills_fifo.head(50))
+        with st.expander("Show AI Fill Events"):
+            st.dataframe(all_fills_ai.head(50))
+
+    else:
+        st.info("Press the button above to run the toy simulation.")
