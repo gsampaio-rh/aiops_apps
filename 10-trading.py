@@ -30,6 +30,15 @@ seed_val = st.sidebar.number_input("Random Seed", 1, 9999, 42)
 label_noise = st.sidebar.slider("Label Noise Fraction", 0.0, 0.5, 0.1)
 threshold_ms = st.sidebar.slider("Fast-Match Threshold (ms)", 1, 100, 10)
 
+st.sidebar.subheader("New Order Generation")
+num_new_orders = st.sidebar.slider("Number of new orders", 10, 1000, 50)
+seed_new = st.sidebar.number_input("New Data Seed", 1, 9999, 123)
+
+st.sidebar.subheader("⚙️ Simulation Settings")
+exec_speed = st.sidebar.slider("Execution Speed (ms per step)", 10, 500, 100)
+exec_mode = st.sidebar.radio("Simulation Mode", ["Sequential", "Batch"], index=0)
+batch_size = st.sidebar.slider("Batch Size (if Batch Mode)", 1, 20, 5)
+
 # Global Ticker Options
 TICKERS = ["AAPL", "TSLA", "MSFT", "AMZN", "GOOG", "META", "NVDA", "NFLX"]
 
@@ -513,10 +522,6 @@ with tabs[3]:
 
     train_cols = st.session_state["train_columns"]
 
-    st.sidebar.subheader("New Order Generation")
-    num_new_orders = st.sidebar.slider("Number of new orders", 10, 1000, 50)
-    seed_new = st.sidebar.number_input("New Data Seed", 1, 9999, 123)
-
     if "df_new" not in st.session_state:
         st.session_state["df_new"] = None
 
@@ -592,3 +597,137 @@ with tabs[3]:
             )
     else:
         st.info("Click 'Generate New Orders' to create a new unlabeled dataset.")
+
+with tabs[4]:
+    st.header("🚀 AI vs. FIFO Trading Simulation")
+
+    # Ensure necessary prior data exists
+    if "df_fifo" not in st.session_state or "df_ai" not in st.session_state:
+        st.error(
+            "No prioritized orders found. Run '🔮 Predict & Prioritize Orders' first."
+        )
+        st.stop()
+
+    # Load sorted order books
+    fifo_orders = st.session_state["df_fifo"].copy()
+    ai_orders = st.session_state["df_ai"].copy()
+
+    # Initialize session state for execution tracking
+    if "fifo_executed" not in st.session_state:
+        st.session_state["fifo_executed"] = []
+        st.session_state["ai_executed"] = []
+
+    
+    # Execution Logic
+    def execute_orders(order_list, mode="FIFO"):
+        executed_orders = []
+        timestamps = []
+        base_time = datetime.now()
+
+        for idx, (_, order) in enumerate(order_list.iterrows()):
+            time.sleep(exec_speed / 1000.0)  # Simulate latency
+            execution_time = base_time + timedelta(milliseconds=idx * exec_speed)
+
+            # Ensure non-negative execution time
+            order["execution_time"] = execution_time
+            executed_orders.append(order.to_dict())
+            timestamps.append(execution_time)
+
+            # Batch Processing
+            if mode == "Batch" and (idx + 1) % batch_size == 0:
+                time.sleep(exec_speed / 1000.0)
+                st.write(f"🔄 Processed batch of {batch_size} orders...")
+
+        return executed_orders, timestamps
+
+    # Run Simulation
+    if st.button("▶ Run Trading Simulation"):
+        with st.spinner("Executing FIFO orders..."):
+            st.session_state["fifo_executed"], fifo_times = execute_orders(
+                fifo_orders, exec_mode
+            )
+
+        with st.spinner("Executing AI-prioritized orders..."):
+            st.session_state["ai_executed"], ai_times = execute_orders(
+                ai_orders, exec_mode
+            )
+
+        st.success("✅ Simulation Completed Successfully!")
+
+        # Convert executed orders to DataFrame
+        df_fifo_exec = pd.DataFrame(st.session_state["fifo_executed"])
+        df_ai_exec = pd.DataFrame(st.session_state["ai_executed"])
+
+        # Execution Time Calculation (Fix Negative Times)
+        fifo_avg_time = (
+            np.mean([(t - fifo_times[0]).total_seconds() for t in fifo_times])
+            if fifo_times
+            else 0
+        )
+        ai_avg_time = (
+            np.mean([(t - ai_times[0]).total_seconds() for t in ai_times])
+            if ai_times
+            else 0
+        )
+
+        # Ensure non-negative times
+        fifo_avg_time = max(fifo_avg_time, 0)
+        ai_avg_time = max(ai_avg_time, 0)
+
+        # 📊 Execution Performance Metrics
+        st.subheader("📊 Execution Performance")
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.metric("FIFO Avg Execution Time (sec)", f"{fifo_avg_time:.3f}")
+
+        with col2:
+            st.metric("AI Avg Execution Time (sec)", f"{ai_avg_time:.3f}")
+
+        # 📈 Execution Timeline Chart (Fixed `range()` issue)
+        st.subheader("📈 Execution Timeline")
+        fig = go.Figure()
+
+        fig.add_trace(
+            go.Scatter(
+                x=fifo_times,
+                y=list(range(len(fifo_times))),  # ✅ FIXED: Converted range to list
+                mode="lines",
+                name="FIFO Execution",
+                line=dict(width=3),
+            )
+        )
+
+        fig.add_trace(
+            go.Scatter(
+                x=ai_times,
+                y=list(range(len(ai_times))),
+                mode="lines",
+                name="AI Execution",
+                line=dict(width=3, dash="dot"),
+            )
+        )
+
+        fig.update_layout(
+            title="Order Execution Over Time",
+            xaxis_title="Time",
+            yaxis_title="Executed Order Count",
+            template="plotly_white",
+        )
+
+        st.plotly_chart(fig, use_container_width=True)
+
+        # 📋 Final Executed Orders Table
+        st.subheader("📋 Final Executed Orders")
+        st.write("### FIFO Execution")
+        st.dataframe(
+            df_fifo_exec.style.format(
+                {"execution_time": lambda t: t.strftime("%H:%M:%S.%f")}
+            )
+        )
+        st.write("### AI Execution")
+        st.dataframe(
+            df_ai_exec.style.format(
+                {"execution_time": lambda t: t.strftime("%H:%M:%S.%f")}
+            )
+        )
