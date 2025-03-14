@@ -382,7 +382,10 @@ with tabs[2]:
 
         accuracies, precisions, recalls, f1s = [], [], [], []
 
-        for train_idx, val_idx in skf.split(X_train_s, y_train):
+        progress_bar = st.progress(0)  # Initialize progress bar
+        total_folds = skf.get_n_splits()
+
+        for fold, (train_idx, val_idx) in enumerate(skf.split(X_train_s, y_train), start=1):
             model_final.fit(X_train_s[train_idx], y_train.iloc[train_idx])
             y_pred = model_final.predict(X_train_s[val_idx])
 
@@ -390,6 +393,10 @@ with tabs[2]:
             precisions.append(precision_score(y_train.iloc[val_idx], y_pred))
             recalls.append(recall_score(y_train.iloc[val_idx], y_pred))
             f1s.append(f1_score(y_train.iloc[val_idx], y_pred))
+
+            progress_bar.progress(fold / total_folds)  # Update progress
+
+        progress_bar.empty()  # Remove progress bar after completion
 
         # Store final trained model
         st.session_state["trained_model"] = (model_final, scaler)
