@@ -55,6 +55,7 @@ def generate_labeled_orders(
     # 1) Generate basic order attributes
     order_ids = np.arange(n_orders)
     sides = np.random.choice(["BUY", "SELL"], size=n_orders)
+    tickers = np.random.choice(TICKERS, size=n_orders)
     prices = np.random.normal(100, 15, size=n_orders).clip(1).round(2)
     sizes = np.random.randint(1, 1000, size=n_orders)
 
@@ -182,6 +183,7 @@ def generate_labeled_orders(
             "order_id": order_ids,
             "arrival_time": arrival_times,
             "side": sides,
+            "ticker": tickers,
             "price": prices,
             "size": sizes,
             "matched_time": matched_times,
@@ -249,7 +251,7 @@ with tabs[1]:
             x="price",
             y="time_to_match_ms",
             color="fast_match",
-            hover_data=["order_id", "side", "size"],
+            hover_data=["order_id", "side", "size", "ticker"],
             title="Historical Data: Price vs. time_to_match_ms",
         )
         st.plotly_chart(fig_pattern, use_container_width=True)
@@ -257,87 +259,90 @@ with tabs[1]:
     else:
         st.info("Click 'Generate Historical Data' to create a new dataset.")
 
-
 # ------------------------------------------------------------------------
 # 3) TRAIN AI MODEL
 # ------------------------------------------------------------------------
-# with tabs[2]:
-#     st.header("🛠 Train AI Model")
+with tabs[2]:
+    st.header("🛠 Train AI Model")
 
-#     if (
-#         "training_data" not in st.session_state
-#         or st.session_state["training_data"] is None
-#     ):
-#         st.error(
-#             "No historical data found. Please generate data in 'Generate Historical Data' tab first."
-#         )
-#         st.stop()
+    if (
+        "training_data" not in st.session_state
+        or st.session_state["training_data"] is None
+    ):
+        st.error(
+            "No historical data found. Please generate data in 'Generate Historical Data' tab first."
+        )
+        st.stop()
 
-#     df_train = st.session_state["training_data"]
+    df_train = st.session_state["training_data"]
 
-#     st.write("**Using the existing historical dataset**:")
-#     st.dataframe(df_train.head(10))
+    st.write("**Using the existing historical dataset**:")
+    st.dataframe(df_train.head(10))
 
-#     # If needed, do dummies etc.
-#     st.write("**Training RandomForest model...**")
-#     progress_bar = st.progress(0)
-#     status_text = st.empty()
+    # If needed, do dummies etc.
+    st.write("**Training RandomForest model...**")
+    progress_bar = st.progress(0)
+    status_text = st.empty()
 
-#     # Example: same approach to encode & train
-#     df_enc = pd.get_dummies(df_train, columns=["side", "ticker"])
-#     X = df_enc.drop(
-#         ["order_id", "fast_match"], axis=1
-#     )  # or match_process_time if you keep it as a feature
-#     y = df_enc["fast_match"]
+    # Convert time_to_match_ms to numeric (keeping unmatched as -1)
+    df_train["time_to_match_ms"] = df_train["time_to_match_ms"].apply(
+        lambda x: pd.to_timedelta(x).total_seconds() * 1000 if x != "Unmatched" else -1
+    )
 
-#     # Train/test split
-#     X_train, X_test, y_train, y_test = train_test_split(
-#         X, y, test_size=0.2, random_state=42
-#     )
-#     scaler = StandardScaler()
-#     X_train_s = scaler.fit_transform(X_train)
-#     X_test_s = scaler.transform(X_test)
+    # Re-encode categorical columns
+    df_enc = pd.get_dummies(df_train, columns=["side", "ticker"])
 
-#     n_iters = 10
-#     iteration_accuracies = []
-#     model_final = None
+    # Drop unnecessary columns (including datetime ones)
+    X = df_enc.drop(["order_id", "fast_match", "arrival_time", "matched_time"], axis=1)
+    y = df_enc["fast_match"]
 
-#     for i in range(n_iters):
-#         subset_indices = np.random.choice(
-#             len(X_train_s), size=int(0.8 * len(X_train_s)), replace=False
-#         )
-#         X_sub = X_train_s[subset_indices]
-#         y_sub = y_train.iloc[subset_indices]
+    # Train/test split
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-#         model = RandomForestClassifier(n_estimators=50, random_state=(42 + i))
-#         model.fit(X_sub, y_sub)
+    scaler = StandardScaler()
+    X_train_s = scaler.fit_transform(X_train)  # <-- No more conversion errors
+    X_test_s = scaler.transform(X_test)
 
-#         test_acc = model.score(X_test_s, y_test)
-#         iteration_accuracies.append(test_acc)
+    n_iters = 10
+    iteration_accuracies = []
+    model_final = None
 
-#         progress_bar.progress(int(100 * (i + 1) / n_iters))
-#         status_text.text(
-#             f"Iteration {i+1}/{n_iters} - Test Accuracy: {test_acc*100:.2f}%"
-#         )
-#         time.sleep(0.2)
+    for i in range(n_iters):
+        subset_indices = np.random.choice(
+            len(X_train_s), size=int(0.8 * len(X_train_s)), replace=False
+        )
+        X_sub = X_train_s[subset_indices]
+        y_sub = y_train.iloc[subset_indices]
 
-#         model_final = model
+        model = RandomForestClassifier(n_estimators=50, random_state=(42 + i))
+        model.fit(X_sub, y_sub)
 
-#     # Store final
-#     st.session_state["trained_model"] = (model_final, scaler)
+        test_acc = model.score(X_test_s, y_test)
+        iteration_accuracies.append(test_acc)
 
-#     st.write("**Final model training complete**")
+        progress_bar.progress(int(100 * (i + 1) / n_iters))
+        status_text.text(
+            f"Iteration {i+1}/{n_iters} - Test Accuracy: {test_acc*100:.2f}%"
+        )
+        time.sleep(0.2)
 
-#     # Show iteration chart
-#     st.subheader("Training Progress Chart")
-#     df_iters = pd.DataFrame(
-#         {"iteration": range(1, n_iters + 1), "test_acc": iteration_accuracies}
-#     )
-#     fig_iters = px.line(
-#         df_iters,
-#         x="iteration",
-#         y="test_acc",
-#         markers=True,
-#         title="Test Accuracy Over Iterations",
-#     )
-#     st.plotly_chart(fig_iters, use_container_width=True)
+        model_final = model
+
+    # Store final
+    st.session_state["trained_model"] = (model_final, scaler)
+
+    st.write("**Final model training complete**")
+
+    # Show iteration chart
+    st.subheader("Training Progress Chart")
+    df_iters = pd.DataFrame(
+        {"iteration": range(1, n_iters + 1), "test_acc": iteration_accuracies}
+    )
+    fig_iters = px.line(
+        df_iters,
+        x="iteration",
+        y="test_acc",
+        markers=True,
+        title="Test Accuracy Over Iterations",
+    )
+    st.plotly_chart(fig_iters, use_container_width=True)
