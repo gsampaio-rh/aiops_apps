@@ -157,7 +157,7 @@ with tabs[1]:
     df = st.session_state["trades"].copy()
 
     st.markdown("**Preview of the trade dataset:**")
-    st.dataframe(df.head(30), use_container_width=True)
+    st.dataframe(df, use_container_width=True)
 
     total_trades = len(df)
     unique_traders = df["trader_id"].nunique()
