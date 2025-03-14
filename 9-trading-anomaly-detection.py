@@ -320,7 +320,7 @@ with tabs[2]:
     st.plotly_chart(fig_scatter, use_container_width=True)
 
     # ------------------- 5) Confusion Matrix / Ground-Truth Check --------------------
-    st.subheader("Confusion Matrix (Toy Ground Truth Check)")
+    st.subheader("Confusion Matrix")
     grouped["TP"] = grouped["true_susp"] & grouped["flagged"]
     grouped["FP"] = (~grouped["true_susp"]) & grouped["flagged"]
     grouped["FN"] = grouped["true_susp"] & (~grouped["flagged"])
