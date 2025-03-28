@@ -16,12 +16,13 @@ st.markdown(
     <style>
         .header { text-align: center; margin-top: 30px; font-size: 2em; font-weight: bold; }
         .section-title { font-size: 1.4em; font-weight: 600; margin-top: 30px; }
-        .agent-box { padding: 10px; border-radius: 8px; margin-bottom: 10px; font-family: monospace; white-space: pre-wrap; }
-        .thought { background-color: #e3f2fd; }
-        .action { background-color: #e8f5e9; }
-        .observation { background-color: #fff8e1; }
-        .final { background-color: #ede7f6; }
-        .error { background-color: #ffebee; color: #b71c1c; }
+        .agent-box { padding: 14px 16px; border-radius: 12px; margin-bottom: 16px; font-family: monospace; white-space: pre-wrap; border-left: 5px solid #1976d2; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .thought { background-color: #e3f2fd; border-left-color: #1976d2; }
+        .action { background-color: #e8f5e9; border-left-color: #388e3c; }
+        .observation { background-color: #fff8e1; border-left-color: #f9a825; }
+        .final { background-color: #ede7f6; border-left-color: #7b1fa2; }
+        .error { background-color: #ffebee; color: #b71c1c; border-left-color: #c62828; }
+        .agent-label { font-weight: bold; font-size: 1rem; margin-bottom: 4px; display: block; }
     </style>
     """,
     unsafe_allow_html=True,
@@ -35,6 +36,110 @@ st.markdown(
 
 # ------------------- LLM SETUP -------------------
 llm = OllamaLLM(model="llama3.1:latest")
+
+
+with st.expander("🤖 Agent Overview"):
+    st.image(
+        "https://github.com/gsampaio-rh/virt-llm-agents/blob/main/images/agent_modules_small.png?raw=true",
+        caption="Agent Overview",
+    )
+
+with st.expander("🤖 Agent Modules"):
+    st.image(
+        "https://github.com/gsampaio-rh/virt-llm-agents/blob/main/images/agent.png?raw=true",
+        caption="Agent Modules",
+    )
+
+with st.expander("🧠 How ReAct Works [Planning Module]"):
+
+    st.write(
+        "ReAct (Reasoning + Acting) is a framework where the AI agent iterates between thought, action, and observation."
+    )
+    st.image(
+        "https://github.com/gsampaio-rh/virt-llm-agents/blob/main/images/react-diagram.png?raw=true",
+        caption="ReAct Framework",
+    )
+    st.code(
+        """
+        ================================ Human Message =================================
+        What is 10+10?
+        ================================== Ai Message ==================================
+        {
+            "thought": "The problem requires a basic arithmetic operation, so I will use the 'basic_calculator' tool.",
+            "action": "basic_calculator",
+            "action_input": {
+                "num1": 10,
+                "num2": 10,
+                "operation": "add"
+            }
+        }
+        ================================ System Message ================================
+        The answer is: 20.
+        Calculated with basic_calculator.
+        ================================== Ai Message ==================================
+        {
+            "answer": "I have the answer: 20."
+        }
+        """
+    )
+
+with st.expander("🔧 View Tool Implementations"):
+    st.code(
+        """
+@tool
+def get_container_logs(container_name: str) -> str:
+    container_name = container_name.strip(
+        "'"
+    )  # Remove extra quotes if passed as a string literal
+    result = subprocess.run(
+        ["podman", "logs", container_name],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    logs = result.stdout + result.stderr
+    # Return more lines to ensure full visibility
+    return logs[-5000:]  # Adjust this if needed
+
+
+@tool
+def suggest_config_fix(logs: str) -> str:
+    logs_lower = logs.lower()
+    logs_lower = logs_lower.strip(
+        "'"
+    ) 
+    messages = []
+    if "fix_invalid_directive" in logs_lower:
+        messages.append(
+            "Detected 'fix_invalid_directive' error. Please check and remove or correct the invalid directive in nginx.conf."
+        )
+    if "permission denied" in logs_lower:
+        messages.append(
+            "Permission issue detected. Ensure the container has proper access rights."
+        )
+    if "connection refused" in logs_lower:
+        messages.append(
+            "Connection issue detected. The service may have failed to start or is unreachable."
+        )
+    if "emerg" in logs_lower:
+        messages.append(
+            "Critical Nginx startup error detected. Please verify the configuration for syntax errors or unsupported settings."
+        )
+    return (
+        "".join(messages)
+        if messages
+        else "No recognizable error found. Please check logs manually for further troubleshooting."
+    )
+
+@tool
+def restart_container(container_name: str) -> str:
+    container_name = container_name.strip("'")
+    subprocess.run(["podman", "restart", container_name])
+    return f"Container {container_name} restarted."
+
+        """,
+        language="python",
+    )
 
 
 # ------------------- TOOL DEFINITIONS -------------------
@@ -58,14 +163,35 @@ def get_container_logs(container_name: str) -> str:
 @tool
 def suggest_config_fix(logs: str) -> str:
     """Given container logs, suggest a config fix."""
-    if "unknown directive" in logs:
-        return "The config file contains an unknown directive. Please remove or correct 'invalid_directive'."
-    return "No fix identified in the logs."
-
+    logs_lower = logs.lower()
+    logs_lower = logs_lower.strip("'")
+    messages = []
+    if "fix_invalid_directive" in logs_lower:
+        messages.append(
+            "Detected 'fix_invalid_directive' error. Please check and remove or correct the invalid directive in nginx.conf."
+        )
+    if "permission denied" in logs_lower:
+        messages.append(
+            "Permission issue detected. Ensure the container has proper access rights."
+        )
+    if "connection refused" in logs_lower:
+        messages.append(
+            "Connection issue detected. The service may have failed to start or is unreachable."
+        )
+    if "emerg" in logs_lower:
+        messages.append(
+            "Critical Nginx startup error detected. Please verify the configuration for syntax errors or unsupported settings."
+        )
+    return (
+        "\n".join(messages)
+        if messages
+        else "No recognizable error found. Please check logs manually for further troubleshooting."
+    )
 
 @tool
 def restart_container(container_name: str) -> str:
     """Restart a Podman container."""
+    container_name = container_name.strip("\"'")
     subprocess.run(["podman", "restart", container_name])
     return f"Container {container_name} restarted."
 
@@ -108,7 +234,7 @@ container_name = st.text_input("Container Name", "broken-nginx")
 if st.button("Run AI Agent to Fix Container"):
     with st.spinner("🤖 Agent is diagnosing the issue..."):
         try:
-            user_prompt = f"The container '{container_name}' is not responding. Diagnose the issue by analyzing logs and suggest a fix."
+            user_prompt = f"The container {container_name} is not responding. Diagnose the issue by analyzing logs and suggest a fix."
             response = agent_executor.invoke(
                 {"input": user_prompt}, {"callbacks": [StreamlitCallbackHandler(st)]}
             )
@@ -122,16 +248,16 @@ if st.button("Run AI Agent to Fix Container"):
                 thought, result = step
                 if "Thought:" in str(thought):
                     st.markdown(
-                        f"<div class='agent-box thought'><b>Thought:</b> {thought}</div>",
+                        f"<div class='agent-box thought'><span class='agent-label'>🧠 Thought</span>{thought}</div>",
                         unsafe_allow_html=True,
                     )
                 if "Action:" in str(thought):
                     st.markdown(
-                        f"<div class='agent-box action'><b>Action:</b> {thought}</div>",
+                        f"<div class='agent-box action'><span class='agent-label'>⚙️ Action</span>{thought}</div>",
                         unsafe_allow_html=True,
                     )
                 st.markdown(
-                    f"<div class='agent-box observation'><b>Observation:</b> {result}</div>",
+                    f"<div class='agent-box observation'><span class='agent-label'>🔍 Observation</span>{result}</div>",
                     unsafe_allow_html=True,
                 )
 
@@ -140,12 +266,33 @@ if st.button("Run AI Agent to Fix Container"):
                 unsafe_allow_html=True,
             )
             st.markdown(
-                f"<div class='agent-box final'>{response['output']}</div>",
+                f"<div class='agent-box final'><span class='agent-label'>✅ Result</span>{response['output']}</div>",
                 unsafe_allow_html=True,
             )
 
         except Exception as e:
             st.markdown(
-                "<div class='agent-box error'><b>Error:</b> {}</div>".format(str(e)),
+                f"<div class='agent-box error'><span class='agent-label'>❌ Error</span>{str(e)}</div>",
                 unsafe_allow_html=True,
             )
+
+with st.expander("📊 Architecture Overview"):
+    st.image(
+        "https://raw.githubusercontent.com/gsampaio-rh/virt-llm-agents/4c7358a53b140c75c6c4ad94828b02e7298f0bd4/images/react_flow.png"
+    )
+
+with st.expander("🤖 Agent Configuration"):
+    st.code(
+        """
+        from langchain import hub
+        from langchain.agents import AgentExecutor, create_react_agent
+        
+        prompt = hub.pull("hwchase17/react")  # Pulling a standard ReAct prompt
+        agent = create_react_agent(llm, tools, prompt)
+        agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True, return_intermediate_steps=True)
+        """,
+        language="python",
+    )
+
+with st.expander("🧩 Prompt + Config Details"):
+    st.code(prompt, language="text")
