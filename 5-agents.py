@@ -34,7 +34,7 @@ st.markdown(
 )
 
 # ---- LLM SETUP ----
-llm = OllamaLLM(model="mistral")
+llm = OllamaLLM(model="llama3.1:latest")
 
 with st.expander("🤖 Agent Overview"):
     st.image(
