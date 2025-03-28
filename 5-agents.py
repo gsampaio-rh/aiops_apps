@@ -1,40 +1,41 @@
+# Refactored Streamlit App: Agentic Workflow Demo
 import streamlit as st
-import time
-import json
 import requests
-import matplotlib.pyplot as plt
 from langchain import hub
 from langchain.agents import AgentExecutor, create_react_agent, Tool
 from langchain.tools import tool
-from langchain.chains import LLMChain
-from langchain.prompts import PromptTemplate
 from langchain_community.callbacks.streamlit import StreamlitCallbackHandler
 from langchain_ollama import OllamaLLM
 
-# ---- APP CONFIG ----
-st.set_page_config(page_title="Autonomous AI Agent Demo", layout="wide")
+# ------------------- APP CONFIG -------------------
+st.set_page_config(page_title="AI Agent Demo", layout="wide")
+
+# ------------------- STYLING -------------------
 st.markdown(
     """
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #f5f5f7; color: #1d1d1f; }
-        .header { text-align: center; margin-top: 40px; font-size: 2em; font-weight: bold; }
-        .agent-thought { background: #f1f8ff; padding: 10px; border-radius: 5px; font-family: monospace; }
-        .agent-action { background: #e3fcef; padding: 10px; border-radius: 5px; font-family: monospace; }
-        .agent-observation { background: #fff8e1; padding: 10px; border-radius: 5px; font-family: monospace; }
-        .error-message { background: #ffebee; padding: 10px; border-radius: 5px; color: #b71c1c; }
+        .header { text-align: center; margin-top: 30px; font-size: 2em; font-weight: bold; }
+        .section-title { font-size: 1.4em; font-weight: 600; margin-top: 30px; }
+        .agent-box { padding: 10px; border-radius: 8px; margin-bottom: 10px; font-family: monospace; }
+        .thought { background-color: #e3f2fd; }
+        .action { background-color: #e8f5e9; }
+        .observation { background-color: #fff8e1; }
+        .final { background-color: #ede7f6; }
+        .error { background-color: #ffebee; color: #b71c1c; }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
-# ---- HEADER ----
+# ------------------- HEADER -------------------
 st.markdown(
-    "<h1 class='header'>AI-Powered Agents for Incident Management</h1>",
+    "<div class='header'>🧠 AI Agent: Thinking Through Incident Response</div>",
     unsafe_allow_html=True,
 )
 
-# ---- LLM SETUP ----
+# ------------------- LLM SETUP -------------------
 llm = OllamaLLM(model="llama3.1:latest")
+
 
 with st.expander("🤖 Agent Overview"):
     st.image(
@@ -116,10 +117,130 @@ with st.expander("🔧 View Tool Implementations"):
         language="python",
     )
 
-with st.expander("🤖 ReAct Agent + Tools Workflow"):
+# ------------------- TOOL DEFINITIONS -------------------
+@tool
+def get_server_logs():
+    """Fetches recent server logs from a public API."""
+    api_url = "https://raw.githubusercontent.com/elastic/examples/master/Common%20Data%20Formats/nginx_logs/nginx_logs"
+    response = requests.get(api_url)
+    return (
+        response.text[:500]
+        if response.status_code == 200
+        else "Could not fetch server logs."
+    )
+
+
+@tool
+def check_incidents():
+    """Fetches current infrastructure incidents from a public API."""
+    api_url = "https://www.githubstatus.com/api/v2/status.json"
+    response = requests.get(api_url)
+    return (
+        response.json()
+        if response.status_code == 200
+        else "Could not fetch incident data."
+    )
+
+
+@tool
+def suggest_fix():
+    """Suggests a fix based on recent log patterns."""
+    return "Based on the logs, the issue appears to be a high error rate in Nginx. Recommended action: Restart the Nginx service."
+
+
+@tool
+def restart_service():
+    """Simulated action: Restarting Nginx service."""
+    return "Nginx service restarted successfully. Monitoring for further issues."
+
+
+# ------------------- AGENT CONFIG -------------------
+tools = [
+    Tool(
+        name="Fetch Server Logs",
+        func=get_server_logs,
+        description="Retrieves logs for troubleshooting.",
+    ),
+    Tool(
+        name="Check Incidents",
+        func=check_incidents,
+        description="Gets current system status.",
+    ),
+    Tool(
+        name="Suggest Fix",
+        func=suggest_fix,
+        description="Suggests resolutions for known issues.",
+    ),
+    Tool(
+        name="Restart Service",
+        func=restart_service,
+        description="Simulates restarting a service.",
+    ),
+]
+
+prompt = hub.pull("hwchase17/react")
+agent = create_react_agent(llm, tools, prompt)
+agent_executor = AgentExecutor(
+    agent=agent, tools=tools, verbose=True, return_intermediate_steps=True
+)
+
+# ------------------- USER INPUT -------------------
+st.markdown(
+    "<div class='section-title'>💬 Describe the issue:</div>", unsafe_allow_html=True
+)
+user_input = st.text_area(
+    "Example: 'Nginx service is failing intermittently.'",
+    "Nginx service is failing intermittently.",
+)
+
+if st.button("Run AI Agent"):
+    with st.spinner("🤖 Thinking..."):
+        try:
+            response = agent_executor.invoke(
+                {"input": user_input}, {"callbacks": [StreamlitCallbackHandler(st)]}
+            )
+            steps = response.get("intermediate_steps", [])
+
+            st.markdown(
+                "<div class='section-title'>🧩 Agent Reasoning Steps:</div>",
+                unsafe_allow_html=True,
+            )
+            for step in steps:
+                thought, result = step
+                if "Thought:" in str(thought):
+                    st.markdown(
+                        f"<div class='agent-box thought'><b>Thought:</b> {thought}</div>",
+                        unsafe_allow_html=True,
+                    )
+                if "Action:" in str(thought):
+                    st.markdown(
+                        f"<div class='agent-box action'><b>Action:</b> {thought}</div>",
+                        unsafe_allow_html=True,
+                    )
+                st.markdown(
+                    f"<div class='agent-box observation'><b>Observation:</b> {result}</div>",
+                    unsafe_allow_html=True,
+                )
+
+            st.markdown(
+                "<div class='section-title'>✅ Final Answer:</div>",
+                unsafe_allow_html=True,
+            )
+            st.markdown(
+                f"<div class='agent-box final'>{response['output']}</div>",
+                unsafe_allow_html=True,
+            )
+
+        except Exception as e:
+            st.markdown(
+                "<div class='agent-box error'><b>Error:</b> {}</div>".format(str(e)),
+                unsafe_allow_html=True,
+            )
+
+# ------------------- OPTIONAL: DIAGRAM + TABS -------------------
+with st.expander("📊 Architecture Overview"):
     st.image(
-        "https://raw.githubusercontent.com/gsampaio-rh/virt-llm-agents/4c7358a53b140c75c6c4ad94828b02e7298f0bd4/images/react_flow.png",
-        caption="ReAct Agent + Tools Workflow",
+        "https://raw.githubusercontent.com/gsampaio-rh/virt-llm-agents/4c7358a53b140c75c6c4ad94828b02e7298f0bd4/images/react_flow.png"
     )
 
 with st.expander("🤖 Agent Configuration"):
@@ -134,6 +255,9 @@ with st.expander("🤖 Agent Configuration"):
         """,
         language="python",
     )
+
+with st.expander("🧩 Prompt + Config Details"):
+    st.code(prompt, language="text")
 
 with st.expander("📝 View AI Prompt"):
     st.code(
@@ -194,97 +318,3 @@ with st.expander("📝 View AI Prompt"):
         """,
         language="text",
     )
-
-
-# ---- TOOL FUNCTIONS ----
-@tool
-def get_server_logs():
-    """Fetches recent server logs from a public API."""
-    api_url = "https://raw.githubusercontent.com/elastic/examples/master/Common%20Data%20Formats/nginx_logs/nginx_logs"
-    response = requests.get(api_url)
-    return (
-        response.text[:500]
-        if response.status_code == 200
-        else "Could not fetch server logs."
-    )
-
-
-@tool
-def check_incidents():
-    """Fetches current infrastructure incidents from a public API."""
-    api_url = "https://www.githubstatus.com/api/v2/status.json"
-    response = requests.get(api_url)
-    return (
-        response.json()
-        if response.status_code == 200
-        else "Could not fetch incident data."
-    )
-
-
-@tool
-def suggest_fix():
-    """Suggests a fix based on recent log patterns."""
-    return "Based on the logs, the issue appears to be a high error rate in Nginx. Recommended action: Restart the Nginx service."
-
-
-@tool
-def restart_service():
-    """Simulated action: Restarting Nginx service."""
-    return "Nginx service restarted successfully. Monitoring for further issues."
-
-
-# ---- INITIALIZE AGENT ----
-tools = [
-    Tool(
-        name="Fetch Server Logs",
-        func=get_server_logs,
-        description="Retrieves recent logs for troubleshooting.",
-    ),
-    Tool(
-        name="Check Incidents",
-        func=check_incidents,
-        description="Gets current system status and active incidents.",
-    ),
-    Tool(
-        name="Suggest Fix",
-        func=suggest_fix,
-        description="Analyzes logs and suggests a resolution.",
-    ),
-    Tool(
-        name="Restart Service",
-        func=restart_service,
-        description="Executes a restart action for a failing service.",
-    ),
-]
-
-# ---- CREATE REACT AGENT ----
-prompt = hub.pull("hwchase17/react")  # Pulling a standard ReAct prompt
-agent = create_react_agent(llm, tools, prompt)
-agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True, return_intermediate_steps=True)
-
-# ---- Header ----
-st.markdown(
-    "<h1 class='header'>Prompt the Agent with something...</h1>", unsafe_allow_html=True
-)
-# ---- USER INTERACTION ----
-user_prompt = st.text_area(
-    "📝 Describe your issue (e.g., 'High CPU usage on server-42'):",
-    "Nginx service is failing intermittently.",
-)
-
-if st.button("Run AI Troubleshooting Agent"):
-    with st.spinner("🤖 AI Agent Thinking..."):
-        try:
-            response = agent_executor.invoke(
-                {"input": prompt}, {"callbacks": [StreamlitCallbackHandler(st)]}
-            )
-            st.markdown("### 🤖 Agent Response")
-            st.markdown(
-                f"<div class='agent-action'><b>Action:</b><br>{response['output']}</div>",
-                unsafe_allow_html=True,
-            )
-        except Exception as e:
-            st.markdown("### ❌ Error Occurred")
-            st.markdown(
-                f"<div class='error-message'>{str(e)}</div>", unsafe_allow_html=True
-            )
