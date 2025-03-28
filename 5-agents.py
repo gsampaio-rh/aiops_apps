@@ -94,7 +94,7 @@ with st.expander("🔧 View Tool Implementations"):
         @tool
         def check_incidents():
             "Fetches current infrastructure incidents from a public API."
-            api_url = "https://status.github.com/api/status.json"
+            api_url = "https://www.githubstatus.com/api/v2/status.json""
             response = requests.get(api_url)
             return (
                 response.json()
