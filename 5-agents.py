@@ -116,6 +116,12 @@ with st.expander("🔧 View Tool Implementations"):
         language="python",
     )
 
+with st.expander("🤖 ReAct Agent + Tools Workflow"):
+    st.image(
+        "https://raw.githubusercontent.com/gsampaio-rh/virt-llm-agents/4c7358a53b140c75c6c4ad94828b02e7298f0bd4/images/react_flow.png",
+        caption="ReAct Agent + Tools Workflow",
+    )
+
 with st.expander("🤖 Agent Configuration"):
     st.code(
         """
