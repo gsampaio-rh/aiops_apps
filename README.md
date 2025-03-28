@@ -83,6 +83,14 @@ streamlit run 4-llm_rag.py
 streamlit run 5-agents.py
 ```
 
+#### Autonomous AI Agent Nginx Log
+
+```sh
+podman run -d \ --name broken-nginx \ -p 8080:80 \ --volume ./nginx/invalid_nginx.conf:/etc/nginx/nginx.conf:ro \ nginx
+
+streamlit run 5-1-agent-logs.py
+```
+
 #### Multi-Agent AI Supervisor
 
 ```sh
