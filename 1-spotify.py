@@ -185,9 +185,9 @@ def create_user_artist_shared_network(
     )
 
     for user in similar_users:
-        G.add_node(
-            user, size=20, color="blue", label=f"👥 {user}"
-        )  # Similar users in blue
+        if user == selected_user:
+            continue  # Don't overwrite the selected user's node
+        G.add_node(user, size=20, color="blue", label=f"👥 {user}")
 
     # 🎵 Artists Liked by Main User
     main_user_artists = set(
@@ -417,10 +417,12 @@ with tabs[1]:
             similarity_matrix = cosine_similarity(user_artist_sparse)
             similarity_df = pd.DataFrame(similarity_matrix, index=user_artist_matrix.index, columns=user_artist_matrix.index)
 
-            # Display in Streamlit
-            with st.expander("🔗 View User-Artist Connection Map"):
-                fig = create_user_artist_chord(df, selected_user)
-                st.plotly_chart(fig)
+            # st.dataframe(similarity_matrix)
+
+            # ---- 📌 Run the User Mapping ----
+            with st.expander("📍 2D User Similarity Map"):
+                user_embeddings = compute_user_embeddings(similarity_df, method="TSNE")
+                plot_user_scatter(user_embeddings)
 
             # Display in Streamlit
             with st.expander("🙂👨‍🎤🥸 View User-Artist Relationship Network"):
@@ -433,12 +435,10 @@ with tabs[1]:
                 )
                 st.plotly_chart(fig)
 
-            # ---- 📌 Run the User Mapping ----
-            with st.expander(
-                "📍 2D User Similarity Map"
-            ):
-                user_embeddings = compute_user_embeddings(similarity_df, method="TSNE")
-                plot_user_scatter(user_embeddings)
+            # Display in Streamlit
+            with st.expander("🔗 View User-Artist Connection Map"):
+                fig = create_user_artist_chord(df, selected_user)
+                st.plotly_chart(fig)
 
             with st.expander("🤝 User-Artist Interaction Grid - Collaborative Filtering Recommendation"):
                 if selected_user not in similarity_df.index:
