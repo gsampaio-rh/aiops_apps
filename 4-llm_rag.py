@@ -166,7 +166,7 @@ system_prompt = st.text_area(
 )
 user_prompt = st.text_area(
     "User Prompt:",
-    "Summarize the last 10 critical errors in the Kubernetes logs.",
+    "Tell me about the Market Data Service.",
     height=100,
 )
 
@@ -181,7 +181,7 @@ with st.expander("See a Sample Prompt Breakdown"):
         *Example:* "You are a helpful IT assistant."
 
         2. **User Prompt:** Specifies the user’s request.
-        *Example:* "Summarize the last 10 critical errors in the Kubernetes logs."
+        *Example:* "Tell me about the Market Data Service."
 
         The AI also uses **special tokens** to structure communication:
         - `<|start_header_id|>` and `<|end_header_id|>` define sections.
