@@ -2,198 +2,169 @@
 
 ## 📌 Overview
 
-This repository contains multiple AI-driven interactive applications designed for real-time incident management, log analysis, recommendation systems, intelligent search, and reinforcement learning. The core applications demonstrate multi-agent collaboration, RAG (Retrieval-Augmented Generation), and advanced machine learning for predictive analysis.
+This repository is a suite of interactive AI-powered tools designed for:
 
-Each module is built with Streamlit for UI, Langchain for AI workflows, and various ML/AI techniques for automation, visualization, and intelligence.
+- **Real-time incident management**
+- **Log analysis & classification**
+- **Intelligent search with RAG (Retrieval-Augmented Generation)**
+- **Music recommendation**
+- **Reinforcement learning trainers**
+- **Automated codebase clustering**
 
-## 🏷️ Features
-
-- **Spotify Recommendation Engine**: AI-based music recommendations using collaborative filtering.
-- **Log Analysis & Classification**: ML-based system for detecting unusual patterns in system logs.
-- **RAG-based Intelligent Search**: AI retrieves, ranks, and presents information from documents.
-- **Multi-Agent Incident Management**: AI agents coordinate log analysis, incident detection, and resolution.
-- **Reinforcement Learning AI Trainer**: AI-driven reinforcement learning system for training and optimizing strategies.
-- **AI Repository Clustering**: Automated scanning of local Git repositories to extract features, visualize distributions, and cluster repos by similarity.
+The core architecture uses **Streamlit** for UI, **LangChain** for intelligent workflows, and a variety of ML/AI models for automation, prediction, and visualization.
 
 ---
 
-## 💂️️ Repository Structure
+## 🏷️ Key Features
+
+- 🎧 **Spotify Recommendation Engine** – AI-driven collaborative filtering.
+- 🪵 **Log Analysis & Classification** – System anomaly detection via ML & LLMs.
+- 🔍 **RAG-based Intelligent Search** – AI-enhanced document querying with vector search.
+- 🤖 **Multi-Agent Incident Management** – Autonomous agents for log triage and resolution.
+- 🧠 **Reinforcement Learning Trainer** – Q-learning simulation & visualization.
+- 📦 **AI Repo Clustering** – Codebase scanning and clustering based on features and language.
+
+---
+
+## 📁 Repository Structure
 
 ```text
 📦 Project Root
-│-- 1-spotify.py              # Collaborative filtering-based music recommendations
-│-- 2-logs.py                 # Log processing and event detection
-│-- 3-log_classification.py   # Log classification using LLMs
-│-- 4-llm_rag.py              # Retrieval-Augmented Generation (RAG) implementation
-│-- 5-agents.py               # Standalone AI agents for task automation
-│-- 6-multi_agents.py         # AI-driven incident management with multi-agents
-│-- 7-rl.py                   # Reinforcement Learning-based AI Trainer
-│-- 8-clustering-repos.py     # AI-powered repository clustering and feature extraction
-│-- requirements.txt          # Dependencies for running the project
-│-- README.md                # Project documentation
-│-- data/                     # Data storage directory
+│-- 1-spotify.py                  # Music recommendation system
+│-- 2-logs.py                     # Log parsing and anomaly detection
+│-- 3-log_classification.py       # Log classification using LLMs
+│-- 4-llm_rag.py                  # Intelligent document search with RAG
+│-- 5-agents.py                   # Autonomous troubleshooting agents
+│-- 5-1-agent-logs.py             # Multi-agent nginx log triage
+│-- 6-multi_agents.py             # AI incident resolution with multiple agents
+│-- 7-rl.py                       # Reinforcement learning visualization
+│-- 8-clustering-repos.py         # Git repo clustering
+│-- files/
+│   ├── spotify_sample.csv        # Sample music dataset
+│   ├── linux_logs.log            # Sample Linux system logs
+│   └── README.md                 # Sample README file for RAG demo
+│-- requirements.txt              # Python dependencies
+│-- README.md                     # This file
 ```
 
 ---
 
-## 🚀 Setup & Installation
+## 🛠️ Setup & Installation
 
 ### 1️⃣ Clone the Repository
 
-```sh
+```bash
 git clone https://github.com/your-repo-name.git
 cd your-repo-name
 ```
 
-### 2️⃣ Install Dependencies
+### 2️⃣ Install Python Dependencies
 
-```sh
+```bash
 pip install -r requirements.txt
 ```
 
-### 3️⃣ Run Each Application
+### 3️⃣ Install & Run Ollama (for LLMs)
 
-#### Spotify Recommendation System
+Several modules use local LLMs powered by **Ollama**.
 
-```sh
+#### 🧠 Install Ollama:
+
+- Visit: [https://ollama.com](https://ollama.com)
+- Download and install for your platform (Mac, Linux, Windows).
+
+#### ▶️ Start Ollama & Pull a Model:
+
+```bash
+ollama run llama3
+```
+
+Or replace `llama3` with another supported model (e.g., `mistral`, `codellama`).
+
+---
+
+## 🚦 Running Applications
+
+### ▶️ Spotify Recommendation Engine
+
+```bash
 streamlit run 1-spotify.py
 ```
 
-#### Log Analysis & Anomaly Detection
+### ▶️ Log Analysis & Anomaly Detection
 
-```sh
+```bash
 streamlit run 2-logs.py
 ```
 
-#### Log Classification
+### ▶️ Log Classification (LLM-based)
 
-```sh
+```bash
 streamlit run 3-log_classification.py
 ```
 
-#### RAG-Based Search
+### ▶️ RAG-Based Document Search
 
-```sh
+```bash
 streamlit run 4-llm_rag.py
 ```
 
-#### Autonomous AI Agents
+### ▶️ Autonomous AI Agents
 
-```sh
+```bash
 streamlit run 5-agents.py
 ```
 
-#### Autonomous AI Agent Nginx Log
+### ▶️ Agent-based Log Triage (w/ Broken Nginx Simulation)
 
-```sh
-podman run -d \ --name broken-nginx \ -p 8080:80 \ --volume ./nginx/invalid_nginx.conf:/etc/nginx/nginx.conf:ro \ nginx
+```bash
+podman run -d \
+  --name broken-nginx \
+  -p 8080:80 \
+  --volume ./nginx/invalid_nginx.conf:/etc/nginx/nginx.conf:ro \
+  nginx
 
 streamlit run 5-1-agent-logs.py
 ```
 
-#### Multi-Agent AI Supervisor
+### ▶️ Multi-Agent AI Supervisor
 
-```sh
+```bash
 streamlit run 6-multi_agents.py
 ```
 
-#### Reinforcement Learning AI Trainer
+### ▶️ Reinforcement Learning AI Trainer
 
-```sh
+```bash
 streamlit run 7-rl.py
 ```
 
-#### AI-Powered Repository Clustering
+### ▶️ Repository Clustering System
 
-```sh
+```bash
 streamlit run 8-clustering-repos.py
 ```
 
 ---
 
-## 🛠️ Core Functionalities
+## 📂 Data Samples Included
 
-### 🔹 Spotify Recommendation Engine (1-spotify.py)
+- `data/spotify_sample.csv` – Example data for music recommender.
+- `data/linux_logs.txt` – Sample logs for testing anomaly detection and classification.
+- `data/sample_rag_readme.md` – Test document for the RAG intelligent search system.
 
-A collaborative filtering AI system that recommends artists based on user preferences and listening history.
+---
 
-🔹 Methods Used:
+## 🧠 Core Tech Stack
 
-- User-based Filtering: Finds similar users for recommendations.
-- Item-based Filtering: Identifies music trends from similar artists.
-- Clustering & Co-occurrence Analysis: Detects playlist-based patterns.
-
-### 🔹 Log Analysis & Anomaly Detection (2-logs.py)
-
-Processes logs, extracts patterns, and visualizes system anomalies using ML.
-
-🔹 Capabilities:
-
-- Parses system logs into structured formats.
-- Identifies patterns using TF-IDF & Clustering.
-- Predicts future incidents based on past trends.
-
-### 🔹 Log Classification (3-log_classification.py)
-
-Using LLMs to transform unstructured data into structured data.
-
-🔹 Features:
-
-- Uses LLM to classify data.
-- Applies supervised learning models.
-- Enhances automated troubleshooting workflows.
-
-### 🔹 RAG-Based Intelligent Search (4-llm_rag.py)
-
-An AI-powered retrieval system that enhances LLM responses with external document search. Uses FAISS for vector storage and Langchain document loaders.
-
-🔹 Key Features:
-
-- Upload and process Markdown files for search.
-- Uses embeddings to rank document relevance.
-- Visualizes attention matrices and search queries.
-
-### 🔹 Autonomous AI Agents (5-agents.py)
-
-Standalone AI agents that handle automated troubleshooting, log analysis, and system monitoring using AI-powered decision-making.
-
-### 🔹 Multi-Agent AI Supervisor (6-multi_agents.py)
-
-A real-time incident management system where AI agents analyze logs, detect incidents, suggest fixes, and execute resolutions. Built with Langchain, Streamlit, and a multi-agent graph framework.
-
-🔹 Agents:
-
-- `log_analyzer`: Fetches logs from external sources.
-- `incident_monitor`: Checks for service disruptions.
-- `fix_suggester`: Recommends solutions based on logs.
-- `action_executor`: Applies fixes to resolve issues.
-
-### 🔹 Reinforcement Learning AI Trainer (7-rl.py)
-
-A reinforcement learning-based AI system that optimizes algorithmic strategies for solving computational problems.
-
-🔹 Features:
-
-- Uses Q-learning to train AI models for problem-solving.
-- Evaluates multiple AI-generated solutions in real-time.
-- Implements reinforcement rewards to enhance decision-making.
-- Supports real-time visualization of training progress.
-
-### 🔹 AI-Powered Repository Clustering (8-clustering-repos.py)
-
-Scans a directory containing multiple Git repositories, extracts code features (languages, dependencies, lines of code, etc.), and uses machine learning to cluster similar repositories.
-
-🔹 Features:
-
-- Automatically detects `.git` folders.
-- Identifies programming languages based on file types.
-- Extracts dependencies from files (e.g., `requirements.txt`, `package.json`).
-- Summarizes code snippets for text-based clustering.
-- Provides advanced clustering methods (K-Means, DBSCAN, Hierarchical).
-- Visualizes clusters in 2D using dimensionality reduction (SVD).
+- **Streamlit** – UI framework for fast prototyping.
+- **LangChain** – LLM workflow orchestration.
+- **scikit-learn, FAISS, pandas, matplotlib** – ML, clustering, and visualization.
+- **Ollama** – Local LLM engine.
+- **Podman/Nginx** – Simulated production environment for agent testing.
 
 ---
 
 ## 📝 License
 
-This project is MIT Licensed—open for contributions and modifications.
+MIT License — free to use, fork, and contribute. Contributions are welcome!
